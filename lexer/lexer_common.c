@@ -5,20 +5,22 @@
 #include <errno.h>
 #include <limits.h>
 
+#define hasFlag(x, flag)	((x & flag) == flag)
+
 typedef union {
-	long long_int_val;
-	unsigned long int u_long_int_val;
-	long long long_long_int_val;
-	unsigned long long int u_long_long_int_val;
+	long lint_val;
+	unsigned long int ulint_val;
+	long long llint_val;
+	unsigned long long int ullint_val;
 } NUMTYPE;
 
-enum num_type {
-	int_type,
-	u_int_type,
-	long_int_type,
-	u_long_int_type,
-	long_long_int_type,
-	u_long_long_int_type
+enum token_flags {
+	int_type = 0x01,
+	uint_type = 0x02,
+	lint_type = 0x04,
+	ulint_type = 0x04 & 0x02,
+	llint_type = 0x08,
+	ullint_type = 0x08 & 0x02
 };
 
 //TODO: change this to something more useful
@@ -30,7 +32,7 @@ typedef union {
 struct LexVal {
 	char *file;
 	int line;
-	enum num_type type;
+	enum token_flags flags;
 	YYSTYPE value;
 };
 
@@ -55,56 +57,56 @@ void setStr(struct LexVal *val, char *txt, size_t len){
 	strncpy(val->value.string_val, txt, len);
 }
 
-void setInt(struct LexVal *val, char *txt, int uflag, int lflag, int llflag, int base){
+void setInt(struct LexVal *val, char *txt, int flags, int base){
 	//TODO: include warning statements when type overflows
 	errno = 0;
-	if(!((uflag && lflag) || llflag)){
+	if(!((hasFlag(flags, uint_type) && hasFlag(flags, lint_type)) || hasFlag(flags, llint_type))){
 		long int num = strtol(txt, NULL, base);
 		if (errno != ERANGE){		
-			if (!(lflag || uflag) && num <= INT_MAX){
-				val->value.num_val.long_int_val = num;
-				val->type = int_type;
+			if (!(hasFlag(flags, lint_type) || hasFlag(flags, uint_type)) && num <= INT_MAX){
+				val->value.num_val.lint_val = num;
+				val->flags |= int_type;
 				return;
 			}
 			
-			if(!(uflag && num > UINT_MAX)){
-				val->value.num_val.long_int_val = num;
-				if(uflag || !(base == 10 || lflag || num > UINT_MAX))
-					val->type = u_int_type;
+			if(!(hasFlag(flags, uint_type) && num > UINT_MAX)){
+				val->value.num_val.lint_val = num;
+				if(hasFlag(flags, uint_type) || !(base == 10 || hasFlag(flags, lint_type) || num > UINT_MAX))
+					val->flags |= uint_type;
 				else
-					val->type = long_int_type;
+					val->flags |= lint_type;
 
 				return;
 			}
 		}
 		else{
 			if(base == 10)
-				llflag = 1;
+				flags |= llint_type;
 		}
 	}
 	
 	errno = 0;
-	if(!llflag){
+	if(!hasFlag(flags, llint_type)){
 		unsigned long int num = strtoul(txt, NULL, base);
 		if(errno != ERANGE){
-			val->value.num_val.u_long_int_val = num;
-			val->type = u_long_int_type;
+			val->value.num_val.ulint_val = num;
+			val->flags |= ulint_type;
 			return;
 		}
 	}
 
 	errno = 0;
-	if(!uflag){
+	if(!hasFlag(flags, uint_type)){
 		long long int num = strtoll(txt, NULL, base);
 		if(errno != ERANGE || base == 10){
-			val->value.num_val.long_long_int_val = num;
-			val->type = long_long_int_type;
+			val->value.num_val.llint_val = num;
+			val->flags |= llint_type;
 			return;
 		}
 	}
 
 	unsigned long long int num = strtoull(txt, NULL, base);
-	val->value.num_val.u_long_long_int_val = num;
-	val->type = u_long_long_int_type;
+	val->value.num_val.ullint_val = num;
+	val->flags |= ullint_type;
 	return;
 }
