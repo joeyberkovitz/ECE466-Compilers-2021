@@ -203,12 +203,22 @@ _Imaginary			{processLine(&yylval); return _IMAGINARY;}
 \r?\n				{currLine++;}
 <*>[ \t]			{;}
 <<EOF>>				{return TOKEOF;}
-.				{fprintf(stderr, "%s:%d: Error: unrecognized character '%s'\n", currFile, currLine, yytext);}
+.				{fprintf(stderr, "%s:%d: Error: unrecognized character '%s'\n", currFile, currLine, yytext); return }
 
 %%
 	/* Code to run */
 
-int main() {
+int main(int argc, char *argv[]) {
+	if(argc > 1){
+		yyin = fopen(argv[1], "r");
+		if(!yyin){
+			fprintf(stderr, "Error: Could not open file %s\n", argv[1]);
+			return 1;
+		}
+		
+		strncpy(currFile, argv[1], 255);
+	}
+
 	register_printf_specifier('S', print_esc_str, print_esc_strinfo);
 	int t;
 	char *kw;
@@ -247,7 +257,7 @@ int main() {
 			case UNION: printf("%s\t%d\tUNION\n", yylval.file, yylval.line); break;
 			case UNSIGNED: printf("%s\t%d\tUNSIGNED\n", yylval.file, yylval.line); break;
 			case VOID: printf("%s\t%d\tVOID\n", yylval.file, yylval.line); break;
-			case VOLATILE: printf("%s\t%d\tVOLTATILE\n", yylval.file, yylval.line); break;
+			case VOLATILE: printf("%s\t%d\tVOLATILE\n", yylval.file, yylval.line); break;
 			case WHILE: printf("%s\t%d\tWHILE\n", yylval.file, yylval.line); break;
 			case _BOOL: printf("%s\t%d\t_BOOL\n", yylval.file, yylval.line); break;
 			case _COMPLEX: printf("%s\t%d\t_COMPLEX\n", yylval.file, yylval.line); break;
@@ -264,11 +274,11 @@ int main() {
 				printf("%s\t%d\tNUMBER\t", yylval.file, yylval.line);
 				switch(yylval.flags){
 					case int_type: printf("INTEGER\t%lld\tINT\n", yylval.value.num_val.integer_val); break;
-					case uint_type: printf("INTEGER\t%lld\tUNSIGNED, INT\n", yylval.value.num_val.integer_val); break;
+					case uint_type: printf("INTEGER\t%lld\tUNSIGNED,INT\n", yylval.value.num_val.integer_val); break;
 					case lint_type:	printf("INTEGER\t%lld\tLONG\n", yylval.value.num_val.integer_val); break;
-					case ulint_type: printf("INTEGER\t%lld\tUNSIGNED, LONG\n", yylval.value.num_val.integer_val); break;
+					case ulint_type: printf("INTEGER\t%lld\tUNSIGNED,LONG\n", yylval.value.num_val.integer_val); break;
 					case llint_type: printf("INTEGER\t%lld\tLONGLONG\n", yylval.value.num_val.integer_val); break;
-					case ullint_type: printf("INTEGER\t%lld\tUNSIGNED, LONGLONG\n", yylval.value.num_val.integer_val); break;
+					case ullint_type: printf("INTEGER\t%lld\tUNSIGNED,LONGLONG\n", yylval.value.num_val.integer_val); break;
 					case float_type: printf("REAL\t%g\tFLOAT\n", yylval.value.num_val.float_val); break;
 					case double_type: printf("REAL\t%g\tDOUBLE\n", yylval.value.num_val.double_val); break;
 					case ldouble_type: printf("REAL\t%Lg\tLONGDOUBLE\n", yylval.value.num_val.ldouble_val); break;
