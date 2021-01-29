@@ -15,10 +15,11 @@ NONDIGIT	[A-Za-z_]
 IDCHARS		[0-9A-Za-z_]
 DECIMAL		[1-9][0-9]*
 OCTAL		0[0-7]*
-HEX			0[Xx][0-9A-Fa-f]+
+HEX		0[Xx][0-9A-Fa-f]+
 ULONG		([Ll][Uu]|[Uu][Ll])
 LONGLONG	(LL|ll)
 ULONGLONG	((LL|ll)[Uu]|[Uu](LL|ll))
+EXPONENT	([+-]?[0-9]+)
 
 	/* States */
 %x GCC_META
@@ -44,7 +45,7 @@ char				{processLine(&yylval); return CHAR;}
 const				{processLine(&yylval); return CONST;}
 continue			{processLine(&yylval); return CONTINUE;}
 default				{processLine(&yylval); return DEFAULT;}
-do					{processLine(&yylval); return DO;}
+do				{processLine(&yylval); return DO;}
 double				{processLine(&yylval); return DOUBLE;}
 else				{processLine(&yylval); return ELSE;}
 enum				{processLine(&yylval); return ENUM;}
@@ -81,26 +82,42 @@ _Imaginary			{processLine(&yylval); return _IMAGINARY;}
 
 	/* Constants - 6.4.4 */
 	/* Integers - 6.4.4.1 */
-{DECIMAL}						{int base = 10; setInt(&yylval, yytext, 0, base); processLine(&yylval); return NUMBER;}
-{DECIMAL}[uU]					{int base = 10; setInt(&yylval, yytext, uint_type, base); processLine(&yylval); return NUMBER;}
-{DECIMAL}[lL]					{int base = 10; setInt(&yylval, yytext, lint_type, base); processLine(&yylval); return NUMBER;}
-{DECIMAL}{ULONG}				{int base = 10; setInt(&yylval, yytext, ulint_type, base); processLine(&yylval); return NUMBER;}
-{DECIMAL}{LONGLONG}				{int base = 10; setInt(&yylval, yytext, llint_type, base); processLine(&yylval); return NUMBER;}
-{DECIMAL}{ULONGLONG}			{int base = 10; setInt(&yylval, yytext, ullint_type, base); processLine(&yylval); return NUMBER;}
+{DECIMAL}						{int base = 10; processLine(&yylval); setInt(&yylval, yytext, int_type, base); return NUMBER;}
+{DECIMAL}[uU]					{int base = 10; processLine(&yylval); setInt(&yylval, yytext, uint_type, base); return NUMBER;}
+{DECIMAL}[lL]					{int base = 10; processLine(&yylval); setInt(&yylval, yytext, lint_type, base); return NUMBER;}
+{DECIMAL}{ULONG}				{int base = 10; processLine(&yylval); setInt(&yylval, yytext, ulint_type, base); return NUMBER;}
+{DECIMAL}{LONGLONG}				{int base = 10; processLine(&yylval); setInt(&yylval, yytext, llint_type, base); return NUMBER;}
+{DECIMAL}{ULONGLONG}			{int base = 10; processLine(&yylval); setInt(&yylval, yytext, ullint_type, base); return NUMBER;}
 
-{OCTAL}							{int base = 8; setInt(&yylval, yytext, 0, base); processLine(&yylval); return NUMBER;}
-{OCTAL}[uU]						{int base = 8; setInt(&yylval, yytext, uint_type, base); processLine(&yylval); return NUMBER;}
-{OCTAL}[lL]						{int base = 8; setInt(&yylval, yytext, lint_type, base); processLine(&yylval); return NUMBER;}
-{OCTAL}{ULONG}					{int base = 8; setInt(&yylval, yytext, ulint_type, base); processLine(&yylval); return NUMBER;}
-{OCTAL}{LONGLONG}				{int base = 8; setInt(&yylval, yytext, llint_type, base); processLine(&yylval); return NUMBER;}
-{OCTAL}{ULONGLONG}				{int base = 8; setInt(&yylval, yytext, ullint_type, base); processLine(&yylval); return NUMBER;}
+{OCTAL}							{int base = 8; processLine(&yylval); setInt(&yylval, yytext, int_type, base); return NUMBER;}
+{OCTAL}[Uu]						{int base = 8; processLine(&yylval); setInt(&yylval, yytext, uint_type, base); return NUMBER;}
+{OCTAL}[Ll]						{int base = 8; processLine(&yylval); setInt(&yylval, yytext, lint_type, base); return NUMBER;}
+{OCTAL}{ULONG}					{int base = 8; processLine(&yylval); setInt(&yylval, yytext, ulint_type, base); return NUMBER;}
+{OCTAL}{LONGLONG}				{int base = 8; processLine(&yylval); setInt(&yylval, yytext, llint_type, base); return NUMBER;}
+{OCTAL}{ULONGLONG}				{int base = 8; processLine(&yylval); setInt(&yylval, yytext, ullint_type, base); return NUMBER;}
 
-{HEX}							{int base = 16; setInt(&yylval, yytext, 0, base); processLine(&yylval); return NUMBER;}
-{HEX}[uU]						{int base = 16; setInt(&yylval, yytext, uint_type, base); processLine(&yylval); return NUMBER;}
-{HEX}[lL]						{int base = 16; setInt(&yylval, yytext, lint_type, base); processLine(&yylval); return NUMBER;}
-{HEX}{ULONG}					{int base = 16; setInt(&yylval, yytext, ulint_type, base); processLine(&yylval); return NUMBER;}
-{HEX}{LONGLONG}					{int base = 16; setInt(&yylval, yytext, llint_type, base); processLine(&yylval); return NUMBER;}
-{HEX}{ULONGLONG}				{int base = 16; setInt(&yylval, yytext, ullint_type, base); processLine(&yylval); return NUMBER;}
+{HEX}							{int base = 16; processLine(&yylval); setInt(&yylval, yytext, int_type, base);; return NUMBER;}
+{HEX}[uU]						{int base = 16; processLine(&yylval); setInt(&yylval, yytext, uint_type, base); return NUMBER;}
+{HEX}[lL]						{int base = 16; processLine(&yylval); setInt(&yylval, yytext, lint_type, base); return NUMBER;}
+{HEX}{ULONG}					{int base = 16; processLine(&yylval); setInt(&yylval, yytext, ulint_type, base); return NUMBER;}
+{HEX}{LONGLONG}					{int base = 16; processLine(&yylval); setInt(&yylval, yytext, llint_type, base); return NUMBER;}
+{HEX}{ULONGLONG}				{int base = 16; processLine(&yylval); setInt(&yylval, yytext, ullint_type, base); return NUMBER;}
+
+	/* Floats - 6.4.4.2 */
+[0-9]*\.[0-9]+([Ee]{EXPONENT})?			|
+[0-9]+(\.|\.?[Ee]{EXPONENT})			|
+0[Xx][0-9A-Fa-f]*\.[0-9A-Fa-f]+[Pp]{EXPONENT}	|
+0[Xx][0-9A-Fa-f]+\.?[Pp]{EXPONENT}		{setFloat(&yylval, yytext, double_type); processLine(&yylval); return NUMBER;}
+
+[0-9]*\.[0-9]+([Ee]{EXPONENT})?[Ff]			|
+[0-9]+(\.|\.?[Ee]{EXPONENT})[Ff]			|
+0[Xx][0-9A-Fa-f]*\.[0-9A-Fa-f]+[Pp]{EXPONENT}[Ff]	|
+0[Xx][0-9A-Fa-f]+\.?[Pp]{EXPONENT}[Ff]			{setFloat(&yylval, yytext, float_type); processLine(&yylval); return NUMBER;}
+
+[0-9]*\.[0-9]+([Ee]{EXPONENT})?[Ll]			|
+[0-9]+(\.|\.?[Ee]{EXPONENT})[Ll]			|
+0[Xx][0-9A-Fa-f]*\.[0-9A-Fa-f]+[Pp]{EXPONENT}[Ll]	|
+0[Xx][0-9A-Fa-f]+\.?[Pp]{EXPONENT}[Ll]			{setFloat(&yylval, yytext, ldouble_type); processLine(&yylval); return NUMBER;}
 
 
 \r?\n					{currLine++;}
@@ -158,7 +175,29 @@ int main() {
 			case IDENT: printf("%s\t%d\tIDENT\t%s\n", yylval.file, yylval.line, yylval.value.string_val); break;
 			
 			//TODO - format appropriately according to type
-			case NUMBER: printf("%s\t%d\tNUMBER\t%lld\n", yylval.file, yylval.line, yylval.value.num_val.llint_val); break;
+			case NUMBER:
+				printf("%s\t%d\tNUMBER\t", yylval.file, yylval.line);
+				switch(yylval.flags){
+					case int_type:
+						printf("INTEGER\t%lld\tINT\n", yylval.value.num_val.integer_val); break;
+					case uint_type:
+						printf("INTEGER\t%lld\tUNSIGNED, INT\n", yylval.value.num_val.integer_val); break;
+					case lint_type:
+						printf("INTEGER\t%lld\tLONG\n", yylval.value.num_val.integer_val); break;
+					case ulint_type:
+						printf("INTEGER\t%lld\tUNSIGNED, LONG\n", yylval.value.num_val.integer_val); break;
+					case llint_type:
+						printf("INTEGER\t%lld\tLONGLONG\n", yylval.value.num_val.integer_val); break;
+					case ullint_type:
+						printf("INTEGER\t%lld\tUNSIGNED, LONGLONG\n", yylval.value.num_val.integer_val); break;
+					case float_type:
+						printf("REAL\t%g\tFLOAT\n", yylval.value.num_val.float_val); break;
+					case double_type:
+						printf("REAL\t%g\tDOUBLE\n", yylval.value.num_val.double_val); break;
+					case ldouble_type:
+						printf("REAL\t%Lg\tLONGDOUBLE\n", yylval.value.num_val.ldouble_val); break;
+				}
+			break;
 		}
 	}
 	printf("EOF\n");
