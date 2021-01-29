@@ -9,22 +9,25 @@
 #define hasFlag(x, flag)	((x & flag) == flag)
 
 typedef union {
-	long lint_val;
-	unsigned long int ulint_val;
-	long long llint_val;
-	unsigned long long int ullint_val;
+	unsigned long long int integer_val;
+	float float_val;
+	double double_val;
+	long double ldouble_val;
 } NUMTYPE;
 
 enum token_flags {
 	int_type = 0x01,
 	uint_type = 0x02,
 	lint_type = 0x04,
-	ulint_type = 0x04 & 0x02,
+	ulint_type = 0x04 | 0x02,
 	llint_type = 0x08,
-	ullint_type = 0x08 & 0x02,
-	flag_escaped = 0x10, //For processing escaped characters appropriately
-	flag_octal = 0x20,
-	flag_hex = 0x40
+	ullint_type = 0x08 | 0x02,
+	float_type = 0x10,
+	double_type = 0x20,
+	ldouble_type = 0x40,
+	flag_escaped = 0x80, //For processing escaped characters appropriately
+	flag_octal = 0x100,
+	flag_hex = 0x200
 };
 
 //TODO: change this to something more useful
@@ -108,58 +111,77 @@ void setStr(struct LexVal *val, char *txt, size_t len){
 	strncpy(val->value.string_val, txt, len);
 }
 
-void setInt(struct LexVal *val, char *txt, int flags, int base){
-	//TODO: include warning statements when type overflows
-	errno = 0;
-	if(!((hasFlag(flags, uint_type) && hasFlag(flags, lint_type)) || hasFlag(flags, llint_type))){
-		long int num = strtol(txt, NULL, base);
-		if (errno != ERANGE){		
-			if (!(hasFlag(flags, lint_type) || hasFlag(flags, uint_type)) && num <= INT_MAX){
-				val->value.num_val.lint_val = num;
-				val->flags |= int_type;
-				return;
-			}
-			
-			if(!(hasFlag(flags, uint_type) && num > UINT_MAX)){
-				val->value.num_val.lint_val = num;
-				if(hasFlag(flags, uint_type) || !(base == 10 || hasFlag(flags, lint_type) || num > UINT_MAX))
-					val->flags |= uint_type;
-				else
-					val->flags |= lint_type;
+void printWarning(struct LexVal *val, char *txt, int orig_flags){
+	if(orig_flags != val->flags)
+		fprintf(stderr, "%s:%d: Warning: Integer value %s overflowed specified type\n", val->file, val->line, txt);
+}
 
-				return;
-			}
+void setInt(struct LexVal *val, char *txt, int flags, int base){
+	errno = 0;
+	unsigned long long int num = strtoull(txt, NULL, base);
+	val->value.num_val.integer_val = num;
+
+	//Check table in 6.4.4.1 for order of type progression	
+	if(errno != ERANGE){
+		if(hasFlag(flags, int_type) && num <= INT_MAX){
+			val->flags = int_type;
+			return;
 		}
-		else{
-			if(base == 10)
-				flags |= llint_type;
+
+		if((hasFlag(flags, uint_type) || (hasFlag(flags, int_type) && base != 10)) && !(hasFlag(flags, lint_type) || hasFlag(flags, llint_type)) && num <= UINT_MAX){
+			val->flags = uint_type;
+			printWarning(val, txt, flags);
+			return;
+		}
+
+		if((hasFlag(flags, lint_type) || hasFlag(flags, int_type)) && !hasFlag(flags, ulint_type) && num <= LONG_MAX){
+			val->flags = lint_type;
+			printWarning(val, txt, flags);
+			return;
+		}
+
+		if((hasFlag(flags, ulint_type) || hasFlag(flags, uint_type) || ((hasFlag(flags, int_type) || hasFlag(flags, lint_type)) && base != 10)) && !hasFlag(flags, llint_type) && num <= ULONG_MAX){
+			val->flags = ulint_type;
+			printWarning(val, txt, flags);
+			return;
 		}
 	}
 	
-	errno = 0;
-	if(!hasFlag(flags, llint_type)){
-		unsigned long int num = strtoul(txt, NULL, base);
-		if(errno != ERANGE){
-			val->value.num_val.ulint_val = num;
-			val->flags |= ulint_type;
+	if((hasFlag(flags, llint_type) || hasFlag(flags, int_type) || hasFlag(flags, lint_type) || (hasFlag(flags, uint_type) && base != 10)) && !(hasFlag(flags, uint_type) && (base == 10 || hasFlag(flags, llint_type)))){
+		if(num <= LLONG_MAX){
+			val->flags = llint_type;
+			printWarning(val, txt, flags);
+			return;
+		}
+		else if(base == 10){
+			val->value.num_val.integer_val = LLONG_MAX;
+			val->flags = llint_type;
+			printWarning(val, txt, flags);
+			fprintf(stderr, "%s:%d: Warning: Integer value %s out of range of type long long int\n", val->file, val->line, txt);
 			return;
 		}
 	}
 
-	errno = 0;
-	if(!hasFlag(flags, uint_type)){
-		long long int num = strtoll(txt, NULL, base);
-		if(errno != ERANGE || base == 10){
-			val->value.num_val.llint_val = num;
-			val->flags |= llint_type;
-			return;
-		}
-	}
-
-	unsigned long long int num = strtoull(txt, NULL, base);
-	val->value.num_val.ullint_val = num;
-	val->flags |= ullint_type;
+	val->flags = ullint_type;
+	printWarning(val, txt, flags);
+	if(errno == ERANGE)
+		fprintf(stderr, "%s:%d: Warning: Integer value %s out of range of type unsigned long long int\n", val->file, val->line, txt);
 	return;
+}
+
+void setFloat(struct LexVal *val, char *txt, int flags){
+	if(hasFlag(flags, float_type)){
+		val->value.num_val.float_val = strtof(txt, NULL);
+		val->flags = float_type;
+	}
+	else if(hasFlag(flags, double_type)){
+		val->value.num_val.double_val = strtod(txt, NULL);
+		val->flags = double_type;
+	}
+	else{
+		val->value.num_val.ldouble_val = strtold(txt, NULL);
+		val->flags = ldouble_type;
+	}
 }
 
 void resetString(){
@@ -240,4 +262,3 @@ void endChar(struct LexVal *yylval){
 	yylval->len = 2;
 	resetString();
 }
-
