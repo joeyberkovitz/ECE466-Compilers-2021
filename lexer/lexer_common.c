@@ -239,8 +239,13 @@ void addChars(char *txt, size_t len, int flags){
 		long escVal = strtol(txt, NULL, base);
 		
 		//Clip to single signed byte
-		if(escVal > 255)
+		if(escVal > 255){
 			escVal = 255;
+			if(base == 16)
+				fprintf(stderr, "%s:%d:Warning:Hex escape sequence \\x%s out of range\n", currFile, currLine, txt);
+			else if(base == 8)
+				fprintf(stderr, "%s:%d:Warning:Octal escape sequence \\%s out of range\n", currFile, currLine, txt);
+		}
 		//printf("Escaped char val: %ld, orig str: %s, base: %d, flags: %d\n", escVal, txt, base, flags);
 		
 		currStr[startPos] = (char)escVal;
@@ -255,6 +260,7 @@ void endString(struct LexVal *yylval){
 
 void endChar(struct LexVal *yylval){
 	if(currStrLen > 2){
+		fprintf(stderr, "%s:%d:Warning:Unsupported multibyte character literal truncated to first byte\n", currFile, currLine);
 		currStr = realloc(currStr, 2);
 		currStr[1] = '\0';
 	}
