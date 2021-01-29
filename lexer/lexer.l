@@ -3,11 +3,16 @@
 %top{
 	#include "ltests/tokens-manual.h"
 	#include "lexer_common.c"
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <printf.h>
 	
 	extern struct LexVal yylval;
 	
 	int currLine = 1;
 	char currFile[256] = "<stdin>"; //Linux limit is 255
+	char *currStr = NULL;
+	unsigned int currStrLen = 0;
 }
 	/* Definitions */
 DIGIT		[0-9]
@@ -16,15 +21,23 @@ IDCHARS		[0-9A-Za-z_]
 DECIMAL		[1-9][0-9]*
 OCTAL		0[0-7]*
 HEX			0[Xx][0-9A-Fa-f]+
+HEXSTR		[Xx][0-9A-Fa-f]+
 ULONG		([Ll][Uu]|[Uu][Ll])
 LONGLONG	(LL|ll)
 ULONGLONG	((LL|ll)[Uu]|[Uu](LL|ll))
+LITCHARS	[ !#$-&(-\[\]-~]
+ESCCHAR		\\['"?\\abfnrtv]
+INVALIDESC	\\[^'"?\\abfnrtv]
 
 	/* States */
 %x GCC_META
 %x GCC_META_FILE
 %x GCC_META_FILE_END
 %x GCC_META_FLAGS
+%x CHAR_CONST
+%x WCHAR_CONST
+%x STR_LIT
+%x WSTR_LIT
 %%
 
 ^\#						BEGIN(GCC_META);
@@ -102,6 +115,22 @@ _Imaginary			{processLine(&yylval); return _IMAGINARY;}
 {HEX}{LONGLONG}					{int base = 16; setInt(&yylval, yytext, llint_type, base); processLine(&yylval); return NUMBER;}
 {HEX}{ULONGLONG}				{int base = 16; setInt(&yylval, yytext, ullint_type, base); processLine(&yylval); return NUMBER;}
 
+	/* Character Constants - 6.4.4.4 */
+<INITIAL>\'												{BEGIN(CHAR_CONST); initString();}
+<INITIAL>L\'											{BEGIN(WCHAR_CONST); initString();}
+<INITIAL>\"												{BEGIN(STR_LIT); initString();}
+<INITIAL>L\"											{BEGIN(WSTR_LIT); initString();}
+<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>[^\\'"]+		{addChars(yytext, yyleng, 0); processLine(&yylval);}
+	/* Note: start at second char - ignore "\" */
+<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>{ESCCHAR}		{addChars(yytext+1, yyleng-1, flag_escaped); processLine(&yylval);}
+<CHAR_CONST,WCHAR_CONST>\"								{addChars("\"", 1, 0); processLine(&yylval);}
+<STR_LIT,WSTR_LIT>\'									{addChars("\'", 1, 0); processLine(&yylval);}
+<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>\\[0-7]{1,3}	{addChars(yytext+1, yyleng-1, flag_octal); processLine(&yylval);}
+<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>\\{HEXSTR}		{addChars(yytext+2, yyleng-2, flag_hex); processLine(&yylval);}
+<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>{INVALIDESC}	{fprintf(stderr, "Error	: Invalid escape character: '%s'\n", yytext);}
+<CHAR_CONST,WCHAR_CONST>\'								{BEGIN(INITIAL); endChar(&yylval); return CHARLIT;}
+<STR_LIT,WSTR_LIT>\"									{BEGIN(INITIAL); endString(&yylval); return STRING;}
+
 
 \r?\n					{currLine++;}
 <*>[ \t]				{;}
@@ -111,6 +140,7 @@ _Imaginary			{processLine(&yylval); return _IMAGINARY;}
 	/* Code to run */
 
 int main() {
+	register_printf_specifier('S', print_esc_str, print_esc_strinfo);
 	int t;
 	char *kw;
 	while(t=yylex()){
@@ -159,6 +189,9 @@ int main() {
 			
 			//TODO - format appropriately according to type
 			case NUMBER: printf("%s\t%d\tNUMBER\t%lld\n", yylval.file, yylval.line, yylval.value.num_val.llint_val); break;
+			case STRING: printf("%s\t%d\tSTRING\t%S\n", yylval.file, yylval.line, (wchar_t *)&yylval); break;
+			case CHARLIT: printf("%s\t%d\tCHARLIT\t%S\n", yylval.file, yylval.line, (wchar_t *)&yylval); break;
+			
 		}
 	}
 	printf("EOF\n");
