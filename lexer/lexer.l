@@ -140,14 +140,14 @@ _Imaginary			{processLine(&yylval); return _IMAGINARY;}
 <INITIAL>L\"											{BEGIN(WSTR_LIT); initString();}
 <CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>[^\\'"]+		{addChars(yytext, yyleng, 0); processLine(&yylval);}
 	/* Note: start at second char - ignore "\" */
-<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>{ESCCHAR}		{addChars(yytext+1, yyleng-1, flag_escaped); processLine(&yylval);}
-<CHAR_CONST,WCHAR_CONST>\"								{addChars("\"", 1, 0); processLine(&yylval);}
-<STR_LIT,WSTR_LIT>\'									{addChars("\'", 1, 0); processLine(&yylval);}
-<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>\\[0-7]{1,3}	{addChars(yytext+1, yyleng-1, flag_octal); processLine(&yylval);}
-<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>\\{HEXSTR}		{addChars(yytext+2, yyleng-2, flag_hex); processLine(&yylval);}
-<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>{INVALIDESC}	{fprintf(stderr, "Error	: Invalid escape character: '%s'\n", yytext);}
-<CHAR_CONST,WCHAR_CONST>\'								{BEGIN(INITIAL); endChar(&yylval); return CHARLIT;}
-<STR_LIT,WSTR_LIT>\"									{BEGIN(INITIAL); endString(&yylval); return STRING;}
+<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>{ESCCHAR}		{addChars(yytext+1, yyleng-1, flag_escaped);}
+<CHAR_CONST,WCHAR_CONST>\"								{addChars("\"", 1, 0);}
+<STR_LIT,WSTR_LIT>\'									{addChars("\'", 1, 0);}
+<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>\\[0-7]{1,3}	{addChars(yytext+1, yyleng-1, flag_octal);}
+<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>\\{HEXSTR}		{addChars(yytext+2, yyleng-2, flag_hex);}
+<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>{INVALIDESC}	{fprintf(stderr, "%s:%d: Error: Invalid escape character: '%s'\n", currFile, currLine, yytext);}
+<CHAR_CONST,WCHAR_CONST>\'								{BEGIN(INITIAL); processLine(&yylval); if(currStrLen > 1) {endChar(&yylval); return CHARLIT;} }
+<STR_LIT,WSTR_LIT>\"									{BEGIN(INITIAL); processLine(&yylval); endString(&yylval); return STRING;}
 
 
 	/* Punctuators - 6.4.6 */
