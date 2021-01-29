@@ -66,11 +66,11 @@ void printWarning(struct LexVal *val, char *txt, int orig_flags){
 }
 
 void setInt(struct LexVal *val, char *txt, int flags, int base){
-	//TODO: include warning statements when type overflows
 	errno = 0;
 	unsigned long long int num = strtoull(txt, NULL, base);
 	val->value.num_val.integer_val = num;
-	
+
+	//Check table in 6.4.4.1 for order of type progression	
 	if(errno != ERANGE){
 		if(hasFlag(flags, int_type) && num <= INT_MAX){
 			val->flags = int_type;
