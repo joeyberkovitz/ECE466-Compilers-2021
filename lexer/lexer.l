@@ -21,7 +21,7 @@ IDCHARS		[0-9A-Za-z_]
 DECIMAL		[1-9][0-9]*
 OCTAL		0[0-7]*
 EXPONENT	([+-]?[0-9]+)
-HEX			0[Xx][0-9A-Fa-f]+
+HEX		0[Xx][0-9A-Fa-f]+
 HEXSTR		[Xx][0-9A-Fa-f]+
 ULONG		([Ll][Uu]|[Uu][Ll])
 LONGLONG	(LL|ll)
@@ -41,12 +41,12 @@ INVALIDESC	\\[^'"?\\abfnrtv]
 %x WSTR_LIT
 %%
 
-^\#						BEGIN(GCC_META);
+^\#				BEGIN(GCC_META);
 <GCC_META>{DIGIT}+		{currLine = atoi(yytext);}
 <GCC_META>["]			BEGIN(GCC_META_FILE);
-<GCC_META_FILE>.+/["]	{strncpy(currFile, yytext, 255); BEGIN(GCC_META_FILE_END);}
-<GCC_META_FILE_END>["]	BEGIN(GCC_META_FLAGS);
-<GCC_META_FLAGS>{DIGIT}	{;} /* TODO: maybe do something with flags */
+<GCC_META_FILE>.+/["]		{strncpy(currFile, yytext, 255); BEGIN(GCC_META_FILE_END);}
+<GCC_META_FILE_END>["]		BEGIN(GCC_META_FLAGS);
+<GCC_META_FLAGS>{DIGIT}		{;}
 <GCC_META_FLAGS>\n		BEGIN(INITIAL);
 
 
@@ -64,11 +64,11 @@ else				{processLine(&yylval); return ELSE;}
 enum				{processLine(&yylval); return ENUM;}
 extern				{processLine(&yylval); return EXTERN;}
 float				{processLine(&yylval); return FLOAT;}
-for					{processLine(&yylval); return FOR;}
+for				{processLine(&yylval); return FOR;}
 goto				{processLine(&yylval); return GOTO;}
-if					{processLine(&yylval); return IF;}
+if				{processLine(&yylval); return IF;}
 inline				{processLine(&yylval); return INLINE;}
-int					{processLine(&yylval); return INT;}
+int				{processLine(&yylval); return INT;}
 long				{processLine(&yylval); return LONG;}
 register			{processLine(&yylval); return REGISTER;}
 restrict			{processLine(&yylval); return RESTRICT;}
@@ -96,8 +96,8 @@ _Imaginary			{processLine(&yylval); return _IMAGINARY;}
 	/* Constants - 6.4.4 */
 	/* Integers - 6.4.4.1 */
 {DECIMAL}					{int base = 10; processLine(&yylval); setInt(&yylval, yytext, int_type, base); return NUMBER;}
-{DECIMAL}[uU]					{int base = 10; processLine(&yylval); setInt(&yylval, yytext, uint_type, base); return NUMBER;}
-{DECIMAL}[lL]					{int base = 10; processLine(&yylval); setInt(&yylval, yytext, lint_type, base); return NUMBER;}
+{DECIMAL}[Uu]					{int base = 10; processLine(&yylval); setInt(&yylval, yytext, uint_type, base); return NUMBER;}
+{DECIMAL}[Ll]					{int base = 10; processLine(&yylval); setInt(&yylval, yytext, lint_type, base); return NUMBER;}
 {DECIMAL}{ULONG}				{int base = 10; processLine(&yylval); setInt(&yylval, yytext, ulint_type, base); return NUMBER;}
 {DECIMAL}{LONGLONG}				{int base = 10; processLine(&yylval); setInt(&yylval, yytext, llint_type, base); return NUMBER;}
 {DECIMAL}{ULONGLONG}				{int base = 10; processLine(&yylval); setInt(&yylval, yytext, ullint_type, base); return NUMBER;}
@@ -110,8 +110,8 @@ _Imaginary			{processLine(&yylval); return _IMAGINARY;}
 {OCTAL}{ULONGLONG}				{int base = 8; processLine(&yylval); setInt(&yylval, yytext, ullint_type, base); return NUMBER;}
 
 {HEX}						{int base = 16; processLine(&yylval); setInt(&yylval, yytext, int_type, base);; return NUMBER;}
-{HEX}[uU]					{int base = 16; processLine(&yylval); setInt(&yylval, yytext, uint_type, base); return NUMBER;}
-{HEX}[lL]					{int base = 16; processLine(&yylval); setInt(&yylval, yytext, lint_type, base); return NUMBER;}
+{HEX}[Uu]					{int base = 16; processLine(&yylval); setInt(&yylval, yytext, uint_type, base); return NUMBER;}
+{HEX}[Ll]					{int base = 16; processLine(&yylval); setInt(&yylval, yytext, lint_type, base); return NUMBER;}
 {HEX}{ULONG}					{int base = 16; processLine(&yylval); setInt(&yylval, yytext, ulint_type, base); return NUMBER;}
 {HEX}{LONGLONG}					{int base = 16; processLine(&yylval); setInt(&yylval, yytext, llint_type, base); return NUMBER;}
 {HEX}{ULONGLONG}				{int base = 16; processLine(&yylval); setInt(&yylval, yytext, ullint_type, base); return NUMBER;}
@@ -138,15 +138,17 @@ _Imaginary			{processLine(&yylval); return _IMAGINARY;}
 <INITIAL>L\'											{BEGIN(WCHAR_CONST); initString();}
 <INITIAL>\"												{BEGIN(STR_LIT); initString();}
 <INITIAL>L\"											{BEGIN(WSTR_LIT); initString();}
-<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>[^\\'"]+		{addChars(yytext, yyleng, 0); processLine(&yylval);}
+<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>[^\\'"\n<<EOF>>]+		{addChars(yytext, yyleng, 0); processLine(&yylval);}
 	/* Note: start at second char - ignore "\" */
 <CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>{ESCCHAR}		{addChars(yytext+1, yyleng-1, flag_escaped);}
 <CHAR_CONST,WCHAR_CONST>\"								{addChars("\"", 1, 0);}
 <STR_LIT,WSTR_LIT>\'									{addChars("\'", 1, 0);}
 <CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>\\[0-7]{1,3}	{addChars(yytext+1, yyleng-1, flag_octal);}
 <CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>\\{HEXSTR}		{addChars(yytext+2, yyleng-2, flag_hex);}
-<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>{INVALIDESC}	{fprintf(stderr, "%s:%d: Error: Invalid escape character: '%s'\n", currFile, currLine, yytext);}
-<CHAR_CONST,WCHAR_CONST>\'								{BEGIN(INITIAL); processLine(&yylval); if(currStrLen > 1) {endChar(&yylval); return CHARLIT;} }
+<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>{INVALIDESC}	{fprintf(stderr, "%s:%d: Warning: Invalid escape character: '%s'\n", currFile, currLine, yytext);}
+<CHAR_CONST,WCHAR_CONST>[\n<<EOF>>]						{BEGIN(INITIAL); resetString(); fprintf(stderr, "%s:%d: Error: missing terminating ' character\n", currFile, currLine);}
+<STR_LIT,WSTR_LIT>[\n<<EOF>>]                                             {BEGIN(INITIAL); resetString(); fprintf(stderr, "%s:%d: Error: missing terminating \" character\n", currFile, currLine);}
+<CHAR_CONST,WCHAR_CONST>\'								{BEGIN(INITIAL); if(currStrLen > 1) {processLine(&yylval); endChar(&yylval); return CHARLIT;} resetString(); fprintf(stderr, "%s:%d: Error: invalid empty character literal\n", currFile, currLine);}
 <STR_LIT,WSTR_LIT>\"									{BEGIN(INITIAL); processLine(&yylval); endString(&yylval); return STRING;}
 
 
@@ -203,7 +205,7 @@ _Imaginary			{processLine(&yylval); return _IMAGINARY;}
 \r?\n				{currLine++;}
 <*>[ \t]			{;}
 <<EOF>>				{return TOKEOF;}
-.				{fprintf(stderr, "%s:%d: Error: unrecognized character '%s'\n", currFile, currLine, yytext); return }
+.				{fprintf(stderr, "%s:%d: Error: unrecognized token '%s'\n", currFile, currLine, yytext);}
 
 %%
 	/* Code to run */
@@ -221,7 +223,6 @@ int main(int argc, char *argv[]) {
 
 	register_printf_specifier('S', print_esc_str, print_esc_strinfo);
 	int t;
-	char *kw;
 	while(t=yylex()){
 		switch(t){
 			//Keywords
