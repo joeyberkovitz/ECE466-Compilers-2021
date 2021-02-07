@@ -12,6 +12,7 @@
 %token <lexNode> STRING
 %type  <hdr> expression
 %type  <hdr> primary-expression
+%type  <hdr> postfix-expression
 
 %% /* Grammar */
 
@@ -28,18 +29,34 @@ expression-statement:
     ;
 
 expression:
-    primary-expression
+    postfix-expression
     ;
 
 
     /* 6.5.1 - Primary expressions */
 primary-expression:
-        IDENT                   {printf("Found ident"); }
-    |   NUMBER                  {printf("Found number"); }
-    |   CHARLIT                 {printf("Found charlit"); }
-    |   STRING                  {printf("Found string"); }
-    |   '(' expression ')'      {printf("Found expr"); }
+        IDENT                   {$$ = allocLexCtr($1, IDENT);}
+    |   NUMBER                  {$$ = allocLexCtr($1, NUMBER);}
+    |   CHARLIT                 {$$ = allocLexCtr($1, CHARLIT);}
+    |   STRING                  {$$ = allocLexCtr($1, STRING);}
+    |   '(' expression ')'      {$$ = $2;} /* throw away parentheses */
     ;
 
+    /* 6.5.2 - Postfix expressions */
+postfix-expression:
+        primary-expression                      {$$ = $1;}
+        /* TODO: check types; Array subscripting: $1 should be pointer, $3 should be offset */
+    |   postfix-expression '[' expression ']'   {$$ = allocBinop($1, $3, '+');}
+    |   postfix-expression '(' argument-expression-list ')' {$$ = allocFunc($1, $3)}
+    ;
+
+argument-expression-list:
+        assignment-expression
+    |   argument-expression-list ',' assignment-expression
+    |
+    ;
+
+assignment-expression:
+    expression;
 
 %% /* Code */
