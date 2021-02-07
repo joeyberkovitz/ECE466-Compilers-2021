@@ -1,7 +1,5 @@
 #include "lexer_common.h"
 
-struct LexVal yylval;
-
 extern int currLine;
 extern char currFile[];
 extern char *currStr;
@@ -9,7 +7,7 @@ extern unsigned int currStrLen;
 
 int print_esc_str(FILE *stream, const struct printf_info *info, const void *const *args){
 	const struct LexVal *lexVal;
-	lexVal = *((const struct LexVal **)(args[0]));
+	lexVal = (*((const union astnode **)(args[0])))->lexNode;
 	
 	int printLen = 0;
 	for(int i = 0; i < lexVal->len - 1; i++){
@@ -51,53 +49,59 @@ int print_esc_strinfo(const struct printf_info *info, size_t n, int *argtypes, i
 	return 1;
 }
 
-void processLine(struct LexVal *val){
-	val->file = currFile;
-	val->line = currLine;
+void allocLex(){
+    yylval.lexNode = malloc(sizeof(struct LexVal));
+    yylval.lexNode->type = NODE_LEX;
 }
 
-void setStr(struct LexVal *val, char *txt, size_t len){
-	val->value.string_val = malloc(len+1);
+void processLine(){
+    allocLex();
+	yylval.lexNode->file = currFile;
+	yylval.lexNode->line = currLine;
+}
+
+void setStr(union astnode val, char *txt, size_t len){
+	val.lexNode->value.string_val = malloc(len+1);
 	
-	if(val->value.string_val == NULL){
+	if(val.lexNode->value.string_val == NULL){
 		fprintf(stderr, "Failed to allocate pointer for LexVal string");
 		return;
 	}
 	
-	strncpy(val->value.string_val, txt, len);
+	strncpy(val.lexNode->value.string_val, txt, len);
 }
 
-void printWarning(struct LexVal *val, char *txt, int orig_flags){
-	if(orig_flags != val->flags)
-		fprintf(stderr, "%s:%d: Warning: Integer value %s overflowed specified type\n", val->file, val->line, txt);
+void printWarning(union astnode val, char *txt, int orig_flags){
+	if(orig_flags != val.lexNode->flags)
+		fprintf(stderr, "%s:%d: Warning: Integer value %s overflowed specified type\n", val.lexNode->file, val.lexNode->line, txt);
 }
 
-void setInt(struct LexVal *val, char *txt, int flags, int base){
+void setInt(union astnode val, char *txt, int flags, int base){
 	errno = 0;
 	unsigned long long int num = strtoull(txt, NULL, base);
-	val->value.num_val.integer_val = num;
+	val.lexNode->value.num_val.integer_val = num;
 
 	//Check table in 6.4.4.1 for order of type progression	
 	if(errno != ERANGE){
 		if(hasFlag(flags, int_type) && num <= INT_MAX){
-			val->flags = int_type;
+			val.lexNode->flags = int_type;
 			return;
 		}
 
 		if((hasFlag(flags, uint_type) || (hasFlag(flags, int_type) && base != 10)) && !(hasFlag(flags, lint_type) || hasFlag(flags, llint_type)) && num <= UINT_MAX){
-			val->flags = uint_type;
+			val.lexNode->flags = uint_type;
 			printWarning(val, txt, flags);
 			return;
 		}
 
 		if((hasFlag(flags, lint_type) || hasFlag(flags, int_type)) && !hasFlag(flags, ulint_type) && num <= LONG_MAX){
-			val->flags = lint_type;
+			val.lexNode->flags = lint_type;
 			printWarning(val, txt, flags);
 			return;
 		}
 
 		if((hasFlag(flags, ulint_type) || hasFlag(flags, uint_type) || ((hasFlag(flags, int_type) || hasFlag(flags, lint_type)) && base != 10)) && !hasFlag(flags, llint_type) && num <= ULONG_MAX){
-			val->flags = ulint_type;
+			val.lexNode->flags = ulint_type;
 			printWarning(val, txt, flags);
 			return;
 		}
@@ -105,38 +109,38 @@ void setInt(struct LexVal *val, char *txt, int flags, int base){
 	
 	if((hasFlag(flags, llint_type) || hasFlag(flags, int_type) || hasFlag(flags, lint_type) || (hasFlag(flags, uint_type) && base != 10)) && !(hasFlag(flags, uint_type) && (base == 10 || hasFlag(flags, llint_type)))){
 		if(num <= LLONG_MAX){
-			val->flags = llint_type;
+			val.lexNode->flags = llint_type;
 			printWarning(val, txt, flags);
 			return;
 		}
 		else if(base == 10){
-			val->value.num_val.integer_val = LLONG_MAX;
-			val->flags = llint_type;
+			val.lexNode->value.num_val.integer_val = LLONG_MAX;
+			val.lexNode->flags = llint_type;
 			printWarning(val, txt, flags);
-			fprintf(stderr, "%s:%d: Warning: Integer value %s out of range of type long long int\n", val->file, val->line, txt);
+			fprintf(stderr, "%s:%d: Warning: Integer value %s out of range of type long long int\n", val.lexNode->file, val.lexNode->line, txt);
 			return;
 		}
 	}
 
-	val->flags = ullint_type;
+	val.lexNode->flags = ullint_type;
 	printWarning(val, txt, flags);
 	if(errno == ERANGE)
-		fprintf(stderr, "%s:%d: Warning: Integer value %s out of range of type unsigned long long int\n", val->file, val->line, txt);
+		fprintf(stderr, "%s:%d: Warning: Integer value %s out of range of type unsigned long long int\n", val.lexNode->file, val.lexNode->line, txt);
 	return;
 }
 
-void setFloat(struct LexVal *val, char *txt, int flags){
+void setFloat(union astnode val, char *txt, int flags){
 	if(hasFlag(flags, float_type)){
-		val->value.num_val.float_val = strtof(txt, NULL);
-		val->flags = float_type;
+		val.lexNode->value.num_val.float_val = strtof(txt, NULL);
+		val.lexNode->flags = float_type;
 	}
 	else if(hasFlag(flags, double_type)){
-		val->value.num_val.double_val = strtod(txt, NULL);
-		val->flags = double_type;
+		val.lexNode->value.num_val.double_val = strtod(txt, NULL);
+		val.lexNode->flags = double_type;
 	}
 	else{
-		val->value.num_val.ldouble_val = strtold(txt, NULL);
-		val->flags = ldouble_type;
+		val.lexNode->value.num_val.ldouble_val = strtold(txt, NULL);
+		val.lexNode->flags = ldouble_type;
 	}
 }
 
@@ -208,19 +212,342 @@ void addChars(char *txt, size_t len, int flags){
 	}
 }
 
-void endString(struct LexVal *yylval){
-	yylval->value.string_val = currStr;
-	yylval->len = currStrLen;
+void endString(union astnode val){
+	val.lexNode->value.string_val = currStr;
+	val.lexNode->len = currStrLen;
 	resetString();
 }
 
-void endChar(struct LexVal *yylval){
+void endChar(union astnode val){
 	if(currStrLen > 2){
 		fprintf(stderr, "%s:%d:Warning:Unsupported multibyte character literal truncated to first byte\n", currFile, currLine);
 		currStr = realloc(currStr, 2);
 		currStr[1] = '\0';
 	}
-	yylval->value.string_val = currStr;
-	yylval->len = 2;
+	val.lexNode->value.string_val = currStr;
+	val.lexNode->len = 2;
 	resetString();
+}
+
+
+void printLex(union astnode node, int tokType){
+    switch(tokType) {
+        //Keywords
+        case AUTO:
+            printf("%s\t%d\tAUTO\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case BREAK:
+            printf("%s\t%d\tBREAK\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case CASE:
+            printf("%s\t%d\tCASE\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case CHAR:
+            printf("%s\t%d\tCHAR\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case CONST:
+            printf("%s\t%d\tCONST\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case CONTINUE:
+            printf("%s\t%d\tCONTINUE\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case DEFAULT:
+            printf("%s\t%d\tDEFAULT\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case DO:
+            printf("%s\t%d\tDO\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case DOUBLE:
+            printf("%s\t%d\tDOUBLE\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case ELSE:
+            printf("%s\t%d\tELSE\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case ENUM:
+            printf("%s\t%d\tENUM\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case EXTERN:
+            printf("%s\t%d\tEXTERN\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case FLOAT:
+            printf("%s\t%d\tFLOAT\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case FOR:
+            printf("%s\t%d\tFOR\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case GOTO:
+            printf("%s\t%d\tGOTO\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case IF:
+            printf("%s\t%d\tIF\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case INLINE:
+            printf("%s\t%d\tINLINE\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case INT:
+            printf("%s\t%d\tINT\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case LONG:
+            printf("%s\t%d\tLONG\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case REGISTER:
+            printf("%s\t%d\tREGISTER\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case RESTRICT:
+            printf("%s\t%d\tRESTRICT\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case RETURN:
+            printf("%s\t%d\tRETURN\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case SHORT:
+            printf("%s\t%d\tSHORT\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case SIGNED:
+            printf("%s\t%d\tSIGNED\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case SIZEOF:
+            printf("%s\t%d\tSIZEOF\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case STATIC:
+            printf("%s\t%d\tSTATIC\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case STRUCT:
+            printf("%s\t%d\tSTRUCT\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case SWITCH:
+            printf("%s\t%d\tSWITCH\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case TYPEDEF:
+            printf("%s\t%d\tTYPEDEF\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case UNION:
+            printf("%s\t%d\tUNION\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case UNSIGNED:
+            printf("%s\t%d\tUNSIGNED\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case VOID:
+            printf("%s\t%d\tVOID\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case VOLATILE:
+            printf("%s\t%d\tVOLATILE\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case WHILE:
+            printf("%s\t%d\tWHILE\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case _BOOL:
+            printf("%s\t%d\t_BOOL\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case _COMPLEX:
+            printf("%s\t%d\t_COMPLEX\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case _IMAGINARY:
+            printf("%s\t%d\t_IMAGINARY\n", node.lexNode->file, node.lexNode->line);
+            break;
+
+            //Identifiers
+        case IDENT:
+            printf("%s\t%d\tIDENT\t%s\n", node.lexNode->file, node.lexNode->line, node.lexNode->value.string_val);
+            break;
+
+        case STRING:
+            printf("%s\t%d\tSTRING\t%S\n", node.lexNode->file, node.lexNode->line, (wchar_t *) &node);
+            break;
+        case CHARLIT:
+            printf("%s\t%d\tCHARLIT\t%S\n", node.lexNode->file, node.lexNode->line, (wchar_t *) &node);
+            break;
+
+            //Integer/Float Constants
+        case NUMBER:
+            printf("%s\t%d\tNUMBER\t", node.lexNode->file, node.lexNode->line);
+            switch (node.lexNode->flags) {
+                case int_type:
+                    printf("INTEGER\t%lld\tINT\n", node.lexNode->value.num_val.integer_val);
+                    break;
+                case uint_type:
+                    printf("INTEGER\t%lld\tUNSIGNED,INT\n", node.lexNode->value.num_val.integer_val);
+                    break;
+                case lint_type:
+                    printf("INTEGER\t%lld\tLONG\n", node.lexNode->value.num_val.integer_val);
+                    break;
+                case ulint_type:
+                    printf("INTEGER\t%lld\tUNSIGNED,LONG\n", node.lexNode->value.num_val.integer_val);
+                    break;
+                case llint_type:
+                    printf("INTEGER\t%lld\tLONGLONG\n", node.lexNode->value.num_val.integer_val);
+                    break;
+                case ullint_type:
+                    printf("INTEGER\t%lld\tUNSIGNED,LONGLONG\n", node.lexNode->value.num_val.integer_val);
+                    break;
+                case float_type:
+                    printf("REAL\t%g\tFLOAT\n", node.lexNode->value.num_val.float_val);
+                    break;
+                case double_type:
+                    printf("REAL\t%g\tDOUBLE\n", node.lexNode->value.num_val.double_val);
+                    break;
+                case ldouble_type:
+                    printf("REAL\t%Lg\tLONGDOUBLE\n", node.lexNode->value.num_val.ldouble_val);
+                    break;
+                default:
+                    fprintf(stderr, "%s:%d: Error: An error has occurred\n", node.lexNode->file,
+                            node.lexNode->line);
+                    break;
+            }
+
+            break;
+
+            //Punctuators
+        case '[':
+            printf("%s\t%d\t[\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case ']':
+            printf("%s\t%d\t]\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case '(':
+            printf("%s\t%d\t(\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case ')':
+            printf("%s\t%d\t)\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case '{':
+            printf("%s\t%d\t{\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case '}':
+            printf("%s\t%d\t}\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case '.':
+            printf("%s\t%d\t.\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case INDSEL:
+            printf("%s\t%d\tINDSEL\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case PLUSPLUS:
+            printf("%s\t%d\tPLUSPLUS\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case MINUSMINUS:
+            printf("%s\t%d\tMINUSMINUS\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case '&':
+            printf("%s\t%d\t&\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case '*':
+            printf("%s\t%d\t*\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case '+':
+            printf("%s\t%d\t+\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case '-':
+            printf("%s\t%d\t-\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case '~':
+            printf("%s\t%d\t~\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case '!':
+            printf("%s\t%d\t!\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case '/':
+            printf("%s\t%d\t/\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case '%':
+            printf("%s\t%d\t%%\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case SHL:
+            printf("%s\t%d\tSHL\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case SHR:
+            printf("%s\t%d\tSHR\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case '<':
+            printf("%s\t%d\t<\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case '>':
+            printf("%s\t%d\t>\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case LTEQ:
+            printf("%s\t%d\tLTEQ\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case GTEQ:
+            printf("%s\t%d\tGTEQ\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case EQEQ:
+            printf("%s\t%d\tEQEQ\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case NOTEQ:
+            printf("%s\t%d\tNOTEQ\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case '^':
+            printf("%s\t%d\t^\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case '|':
+            printf("%s\t%d\t|\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case LOGAND:
+            printf("%s\t%d\tLOGAND\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case LOGOR:
+            printf("%s\t%d\tLOGOR\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case '?':
+            printf("%s\t%d\t?\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case ':':
+            printf("%s\t%d\t:\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case ';':
+            printf("%s\t%d\t;\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case ELLIPSIS:
+            printf("%s\t%d\tELLIPSIS\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case '=':
+            printf("%s\t%d\t=\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case TIMESEQ:
+            printf("%s\t%d\tTIMESEQ\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case DIVEQ:
+            printf("%s\t%d\tDIVEQ\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case MODEQ:
+            printf("%s\t%d\tMODEQ\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case PLUSEQ:
+            printf("%s\t%d\tPLUSEQ\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case MINUSEQ:
+            printf("%s\t%d\tMINUSEQ\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case SHLEQ:
+            printf("%s\t%d\tSHLEQ\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case SHREQ:
+            printf("%s\t%d\tSHREQ\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case ANDEQ:
+            printf("%s\t%d\tANDEQ\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case XOREQ:
+            printf("%s\t%d\tXOREQ\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case OREQ:
+            printf("%s\t%d\tOREQ\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case ',':
+            printf("%s\t%d\t,\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case '#':
+            printf("%s\t%d\t#\n", node.lexNode->file, node.lexNode->line);
+            break;
+        case OCTOCT:
+            printf("%s\t%d\tOCTOCT\n", node.lexNode->file, node.lexNode->line);
+            break;
+
+            //EOF
+        case TOKEOF:
+            break;
+
+        default:
+            fprintf(stderr, "%s:%d: Error: An error has occurred\n", node.lexNode->file, node.lexNode->line);
+            break;
+    }
 }

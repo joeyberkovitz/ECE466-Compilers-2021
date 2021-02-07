@@ -9,7 +9,14 @@
 #include <limits.h>
 #include <printf.h>
 
+#include "ltests/tokens-manual.h"
+#include "parser/parser.y.o.h"
+
 #define hasFlag(x, flag)	((x & flag) == flag)
+enum node_type {
+    NODE_LEX,
+    NODE_BINOP
+};
 
 typedef union {
 	unsigned long long int integer_val;
@@ -40,6 +47,7 @@ typedef union {
 } LexVals;
 
 struct LexVal {
+    enum node_type type;
 	char *file;
 	int line;
 	int len;
@@ -47,21 +55,40 @@ struct LexVal {
 	LexVals value;
 };
 
-struct LexVal yylval;
+//Present only for identifying type of node - contains any common fields
+struct astnode_hdr{
+    enum node_type type;
+};
+
+struct astnode_binop {
+    enum node_type type;
+    int op;
+    union astnode *left, *right;
+};
+
+union astnode {
+    struct astnode_hdr *hdr;
+    struct LexVal *lexNode;
+    struct astnode_binop *binNode;
+};
+
+union astnode yylval;
+
+void allocLex();
 
 int print_esc_str(FILE *stream, const struct printf_info *info, const void *const *args);
 
 int print_esc_strinfo(const struct printf_info *info, size_t n, int *argtypes, int *size);
 
-void processLine(struct LexVal *val);
+void processLine();
 
-void setStr(struct LexVal *val, char *txt, size_t len);
+void setStr(union astnode val, char *txt, size_t len);
 
-void printWarning(struct LexVal *val, char *txt, int orig_flags);
+void printWarning(union astnode val, char *txt, int orig_flags);
 
-void setInt(struct LexVal *val, char *txt, int flags, int base);
+void setInt(union astnode val, char *txt, int flags, int base);
 
-void setFloat(struct LexVal *val, char *txt, int flags);
+void setFloat(union astnode val, char *txt, int flags);
 
 void resetString();
 
@@ -69,8 +96,10 @@ void initString();
 
 void addChars(char *txt, size_t len, int flags);
 
-void endString(struct LexVal *yylval);
+void endString(union astnode yylval);
 
-void endChar(struct LexVal *yylval);
+void endChar(union astnode yylval);
+
+void printLex(union astnode node, int tokType);
 
 #endif

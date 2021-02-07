@@ -4,11 +4,11 @@
 
 enum tokens {
 	TOKEOF=0,
-	IDENT=257,	/* This is where yacc will put it */
-	CHARLIT=259,
-	STRING,
+	//IDENT=257,	/* This is where yacc will put it */
+	//CHARLIT,
+	//STRING,
 	//NUMBER,
-	INDSEL,
+	INDSEL=262,
 	PLUSPLUS,
 	MINUSMINUS,
 	SHL,

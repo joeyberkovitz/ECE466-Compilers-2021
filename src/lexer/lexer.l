@@ -11,7 +11,7 @@
 	#include <printf.h>
 
 
-	extern struct LexVal yylval;
+	extern union astnode yylval;
 	
 	extern int currLine;
 	extern char currFile[];
@@ -55,86 +55,86 @@ INVALIDESC	\\[^'"?\\abfnrtv]
 
 
 	/* Keywords - 6.4.1 */
-auto				{processLine(&yylval); return AUTO;}
-break				{processLine(&yylval); return BREAK;}
-case				{processLine(&yylval); return CASE;}
-char				{processLine(&yylval); return CHAR;}
-const				{processLine(&yylval); return CONST;}
-continue			{processLine(&yylval); return CONTINUE;}
-default				{processLine(&yylval); return DEFAULT;}
-do				{processLine(&yylval); return DO;}
-double				{processLine(&yylval); return DOUBLE;}
-else				{processLine(&yylval); return ELSE;}
-enum				{processLine(&yylval); return ENUM;}
-extern				{processLine(&yylval); return EXTERN;}
-float				{processLine(&yylval); return FLOAT;}
-for				{processLine(&yylval); return FOR;}
-goto				{processLine(&yylval); return GOTO;}
-if				{processLine(&yylval); return IF;}
-inline				{processLine(&yylval); return INLINE;}
-int				{processLine(&yylval); return INT;}
-long				{processLine(&yylval); return LONG;}
-register			{processLine(&yylval); return REGISTER;}
-restrict			{processLine(&yylval); return RESTRICT;}
-return				{processLine(&yylval); return RETURN;}
-short				{processLine(&yylval); return SHORT;}
-signed				{processLine(&yylval); return SIGNED;}
-sizeof				{processLine(&yylval); return SIZEOF;}
-static				{processLine(&yylval); return STATIC;}
-struct				{processLine(&yylval); return STRUCT;}
-switch				{processLine(&yylval); return SWITCH;}
-typedef				{processLine(&yylval); return TYPEDEF;}
-union				{processLine(&yylval); return UNION;}
-unsigned			{processLine(&yylval); return UNSIGNED;}
-void				{processLine(&yylval); return VOID;}
-volatile			{processLine(&yylval); return VOLATILE;}
-while				{processLine(&yylval); return WHILE;}
-_Bool				{processLine(&yylval); return _BOOL;}
-_Complex			{processLine(&yylval); return _COMPLEX;}
-_Imaginary			{processLine(&yylval); return _IMAGINARY;}
+auto				{processLine(); return AUTO;}
+break				{processLine(); return BREAK;}
+case				{processLine(); return CASE;}
+char				{processLine(); return CHAR;}
+const				{processLine(); return CONST;}
+continue			{processLine(); return CONTINUE;}
+default				{processLine(); return DEFAULT;}
+do				{processLine(); return DO;}
+double				{processLine(); return DOUBLE;}
+else				{processLine(); return ELSE;}
+enum				{processLine(); return ENUM;}
+extern				{processLine(); return EXTERN;}
+float				{processLine(); return FLOAT;}
+for				{processLine(); return FOR;}
+goto				{processLine(); return GOTO;}
+if				{processLine(); return IF;}
+inline				{processLine(); return INLINE;}
+int				{processLine(); return INT;}
+long				{processLine(); return LONG;}
+register			{processLine(); return REGISTER;}
+restrict			{processLine(); return RESTRICT;}
+return				{processLine(); return RETURN;}
+short				{processLine(); return SHORT;}
+signed				{processLine(); return SIGNED;}
+sizeof				{processLine(); return SIZEOF;}
+static				{processLine(); return STATIC;}
+struct				{processLine(); return STRUCT;}
+switch				{processLine(); return SWITCH;}
+typedef				{processLine(); return TYPEDEF;}
+union				{processLine(); return UNION;}
+unsigned			{processLine(); return UNSIGNED;}
+void				{processLine(); return VOID;}
+volatile			{processLine(); return VOLATILE;}
+while				{processLine(); return WHILE;}
+_Bool				{processLine(); return _BOOL;}
+_Complex			{processLine(); return _COMPLEX;}
+_Imaginary			{processLine(); return _IMAGINARY;}
 
 
 	/* Identifiers - 6.4.2 */
-{NONDIGIT}{IDCHARS}*	{setStr(&yylval, yytext, yyleng); processLine(&yylval); return IDENT;}
+{NONDIGIT}{IDCHARS}*	{processLine(); setStr(yylval, yytext, yyleng); return IDENT;}
 
 	/* Constants - 6.4.4 */
 	/* Integers - 6.4.4.1 */
-{DECIMAL}					{int base = 10; processLine(&yylval); setInt(&yylval, yytext, int_type, base); return NUMBER;}
-{DECIMAL}[Uu]					{int base = 10; processLine(&yylval); setInt(&yylval, yytext, uint_type, base); return NUMBER;}
-{DECIMAL}[Ll]					{int base = 10; processLine(&yylval); setInt(&yylval, yytext, lint_type, base); return NUMBER;}
-{DECIMAL}{ULONG}				{int base = 10; processLine(&yylval); setInt(&yylval, yytext, ulint_type, base); return NUMBER;}
-{DECIMAL}{LONGLONG}				{int base = 10; processLine(&yylval); setInt(&yylval, yytext, llint_type, base); return NUMBER;}
-{DECIMAL}{ULONGLONG}				{int base = 10; processLine(&yylval); setInt(&yylval, yytext, ullint_type, base); return NUMBER;}
+{DECIMAL}					{int base = 10; processLine(); setInt(yylval, yytext, int_type, base); return NUMBER;}
+{DECIMAL}[Uu]					{int base = 10; processLine(); setInt(yylval, yytext, uint_type, base); return NUMBER;}
+{DECIMAL}[Ll]					{int base = 10; processLine(); setInt(yylval, yytext, lint_type, base); return NUMBER;}
+{DECIMAL}{ULONG}				{int base = 10; processLine(); setInt(yylval, yytext, ulint_type, base); return NUMBER;}
+{DECIMAL}{LONGLONG}				{int base = 10; processLine(); setInt(yylval, yytext, llint_type, base); return NUMBER;}
+{DECIMAL}{ULONGLONG}				{int base = 10; processLine(); setInt(yylval, yytext, ullint_type, base); return NUMBER;}
 
-{OCTAL}						{int base = 8; processLine(&yylval); setInt(&yylval, yytext, int_type, base); return NUMBER;}
-{OCTAL}[Uu]					{int base = 8; processLine(&yylval); setInt(&yylval, yytext, uint_type, base); return NUMBER;}
-{OCTAL}[Ll]					{int base = 8; processLine(&yylval); setInt(&yylval, yytext, lint_type, base); return NUMBER;}
-{OCTAL}{ULONG}					{int base = 8; processLine(&yylval); setInt(&yylval, yytext, ulint_type, base); return NUMBER;}
-{OCTAL}{LONGLONG}				{int base = 8; processLine(&yylval); setInt(&yylval, yytext, llint_type, base); return NUMBER;}
-{OCTAL}{ULONGLONG}				{int base = 8; processLine(&yylval); setInt(&yylval, yytext, ullint_type, base); return NUMBER;}
+{OCTAL}						{int base = 8; processLine(); setInt(yylval, yytext, int_type, base); return NUMBER;}
+{OCTAL}[Uu]					{int base = 8; processLine(); setInt(yylval, yytext, uint_type, base); return NUMBER;}
+{OCTAL}[Ll]					{int base = 8; processLine(); setInt(yylval, yytext, lint_type, base); return NUMBER;}
+{OCTAL}{ULONG}					{int base = 8; processLine(); setInt(yylval, yytext, ulint_type, base); return NUMBER;}
+{OCTAL}{LONGLONG}				{int base = 8; processLine(); setInt(yylval, yytext, llint_type, base); return NUMBER;}
+{OCTAL}{ULONGLONG}				{int base = 8; processLine(); setInt(yylval, yytext, ullint_type, base); return NUMBER;}
 
-{HEX}						{int base = 16; processLine(&yylval); setInt(&yylval, yytext, int_type, base);; return NUMBER;}
-{HEX}[Uu]					{int base = 16; processLine(&yylval); setInt(&yylval, yytext, uint_type, base); return NUMBER;}
-{HEX}[Ll]					{int base = 16; processLine(&yylval); setInt(&yylval, yytext, lint_type, base); return NUMBER;}
-{HEX}{ULONG}					{int base = 16; processLine(&yylval); setInt(&yylval, yytext, ulint_type, base); return NUMBER;}
-{HEX}{LONGLONG}					{int base = 16; processLine(&yylval); setInt(&yylval, yytext, llint_type, base); return NUMBER;}
-{HEX}{ULONGLONG}				{int base = 16; processLine(&yylval); setInt(&yylval, yytext, ullint_type, base); return NUMBER;}
+{HEX}						{int base = 16; processLine(); setInt(yylval, yytext, int_type, base);; return NUMBER;}
+{HEX}[Uu]					{int base = 16; processLine(); setInt(yylval, yytext, uint_type, base); return NUMBER;}
+{HEX}[Ll]					{int base = 16; processLine(); setInt(yylval, yytext, lint_type, base); return NUMBER;}
+{HEX}{ULONG}					{int base = 16; processLine(); setInt(yylval, yytext, ulint_type, base); return NUMBER;}
+{HEX}{LONGLONG}					{int base = 16; processLine(); setInt(yylval, yytext, llint_type, base); return NUMBER;}
+{HEX}{ULONGLONG}				{int base = 16; processLine(); setInt(yylval, yytext, ullint_type, base); return NUMBER;}
 
 	/* Floats - 6.4.4.2 */
 [0-9]*\.[0-9]+([Ee]{EXPONENT})?				|
 [0-9]+(\.|\.?[Ee]{EXPONENT})				|
 0[Xx][0-9A-Fa-f]*\.[0-9A-Fa-f]+[Pp]{EXPONENT}		|
-0[Xx][0-9A-Fa-f]+\.?[Pp]{EXPONENT}			{setFloat(&yylval, yytext, double_type); processLine(&yylval); return NUMBER;}
+0[Xx][0-9A-Fa-f]+\.?[Pp]{EXPONENT}			{processLine(); setFloat(yylval, yytext, double_type); return NUMBER;}
 
 [0-9]*\.[0-9]+([Ee]{EXPONENT})?[Ff]			|
 [0-9]+(\.|\.?[Ee]{EXPONENT})[Ff]			|
 0[Xx][0-9A-Fa-f]*\.[0-9A-Fa-f]+[Pp]{EXPONENT}[Ff]	|
-0[Xx][0-9A-Fa-f]+\.?[Pp]{EXPONENT}[Ff]			{setFloat(&yylval, yytext, float_type); processLine(&yylval); return NUMBER;}
+0[Xx][0-9A-Fa-f]+\.?[Pp]{EXPONENT}[Ff]			{processLine(); setFloat(yylval, yytext, float_type); return NUMBER;}
 
 [0-9]*\.[0-9]+([Ee]{EXPONENT})?[Ll]			|
 [0-9]+(\.|\.?[Ee]{EXPONENT})[Ll]			|
 0[Xx][0-9A-Fa-f]*\.[0-9A-Fa-f]+[Pp]{EXPONENT}[Ll]	|
-0[Xx][0-9A-Fa-f]+\.?[Pp]{EXPONENT}[Ll]			{setFloat(&yylval, yytext, ldouble_type); processLine(&yylval); return NUMBER;}
+0[Xx][0-9A-Fa-f]+\.?[Pp]{EXPONENT}[Ll]			{processLine(); setFloat(yylval, yytext, ldouble_type); return NUMBER;}
 
 
 	/* Character Constants - 6.4.4.4, String literals - 6.4.5 */
@@ -142,7 +142,7 @@ _Imaginary			{processLine(&yylval); return _IMAGINARY;}
 <INITIAL>L\'											{BEGIN(WCHAR_CONST); initString();}
 <INITIAL>\"												{BEGIN(STR_LIT); initString();}
 <INITIAL>L\"											{BEGIN(WSTR_LIT); initString();}
-<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>[^\\'"\n<<EOF>>]+		{addChars(yytext, yyleng, 0); processLine(&yylval);}
+<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>[^\\'"\n<<EOF>>]+		{addChars(yytext, yyleng, 0);}
 	/* Note: start at second char - ignore "\" */
 <CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>{ESCCHAR}		{addChars(yytext+1, yyleng-1, flag_escaped);}
 <CHAR_CONST,WCHAR_CONST>\"								{addChars("\"", 1, 0);}
@@ -151,60 +151,60 @@ _Imaginary			{processLine(&yylval); return _IMAGINARY;}
 <CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>\\{HEXSTR}		{addChars(yytext+2, yyleng-2, flag_hex);}
 <CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>{INVALIDESC}	{fprintf(stderr, "%s:%d: Warning: Invalid escape character: '%s'\n", currFile, currLine, yytext);}
 <CHAR_CONST,WCHAR_CONST>[\n<<EOF>>]						{BEGIN(INITIAL); resetString(); fprintf(stderr, "%s:%d: Error: missing terminating ' character\n", currFile, currLine);}
-<STR_LIT,WSTR_LIT>[\n<<EOF>>]                                             {BEGIN(INITIAL); resetString(); fprintf(stderr, "%s:%d: Error: missing terminating \" character\n", currFile, currLine);}
-<CHAR_CONST,WCHAR_CONST>\'								{BEGIN(INITIAL); if(currStrLen > 1) {processLine(&yylval); endChar(&yylval); return CHARLIT;} resetString(); fprintf(stderr, "%s:%d: Error: invalid empty character literal\n", currFile, currLine);}
-<STR_LIT,WSTR_LIT>\"									{BEGIN(INITIAL); processLine(&yylval); endString(&yylval); return STRING;}
+<STR_LIT,WSTR_LIT>[\n<<EOF>>]                           {BEGIN(INITIAL); resetString(); fprintf(stderr, "%s:%d: Error: missing terminating \" character\n", currFile, currLine);}
+<CHAR_CONST,WCHAR_CONST>\'								{BEGIN(INITIAL); if(currStrLen > 1) {processLine(); endChar(yylval); return CHARLIT;} resetString(); fprintf(stderr, "%s:%d: Error: invalid empty character literal\n", currFile, currLine);}
+<STR_LIT,WSTR_LIT>\"									{BEGIN(INITIAL); processLine(); endString(yylval); return STRING;}
 
 
 	/* Punctuators - 6.4.6 */
-\[|<:				{processLine(&yylval); return '[';}
-\]|:>				{processLine(&yylval); return ']';}
-\(				{processLine(&yylval); return '(';}
-\)				{processLine(&yylval); return ')';}
-\{|<%				{processLine(&yylval); return '{';}
-\}|%>				{processLine(&yylval); return '}';}
-\.				{processLine(&yylval); return '.';}
-\->				{processLine(&yylval); return INDSEL;}
-\+\+				{processLine(&yylval); return PLUSPLUS;}
-\-\-				{processLine(&yylval); return MINUSMINUS;}
-&				{processLine(&yylval); return '&';}
-\*				{processLine(&yylval); return '*';}
-\+				{processLine(&yylval); return '+';}
-\-				{processLine(&yylval); return '-';}
-~				{processLine(&yylval); return '~';}
-!				{processLine(&yylval); return '!';}
-\/				{processLine(&yylval); return '/';}
-%				{processLine(&yylval); return '%';}
-\<\<				{processLine(&yylval); return SHL;}
->>				{processLine(&yylval); return SHR;}
-\<				{processLine(&yylval); return '<';}
->				{processLine(&yylval); return '>';}
-\<=				{processLine(&yylval); return LTEQ;}
->=				{processLine(&yylval); return GTEQ;}
-==				{processLine(&yylval); return EQEQ;}
-!=				{processLine(&yylval); return NOTEQ;}
-\^				{processLine(&yylval); return '^';}
-\|				{processLine(&yylval); return '|';}
-&&				{processLine(&yylval); return LOGAND;}
-\|\|				{processLine(&yylval); return LOGOR;}
-\?				{processLine(&yylval); return '?';}
-:				{processLine(&yylval); return ':';}
-;				{processLine(&yylval); return ';';}
-\.\.\.				{processLine(&yylval); return ELLIPSIS;}
-=				{processLine(&yylval); return '=';}
-\*=				{processLine(&yylval); return TIMESEQ;}
-\/=				{processLine(&yylval); return DIVEQ;}
-%=				{processLine(&yylval); return MODEQ;}
-\+=				{processLine(&yylval); return PLUSEQ;}
-\-=				{processLine(&yylval); return MINUSEQ;}
-\<\<=				{processLine(&yylval); return SHLEQ;}
->>=				{processLine(&yylval); return SHREQ;}
-&=				{processLine(&yylval); return ANDEQ;}
-\^=				{processLine(&yylval); return XOREQ;}
-\|=				{processLine(&yylval); return OREQ;}
-,				{processLine(&yylval); return ',';}
-#|%:				{processLine(&yylval); return '#';}
-##|%:%:				{processLine(&yylval); return OCTOCT;}
+\[|<:				{processLine(); return '[';}
+\]|:>				{processLine(); return ']';}
+\(				{processLine(); return '(';}
+\)				{processLine(); return ')';}
+\{|<%				{processLine(); return '{';}
+\}|%>				{processLine(); return '}';}
+\.				{processLine(); return '.';}
+\->				{processLine(); return INDSEL;}
+\+\+				{processLine(); return PLUSPLUS;}
+\-\-				{processLine(); return MINUSMINUS;}
+&				{processLine(); return '&';}
+\*				{processLine(); return '*';}
+\+				{processLine(); return '+';}
+\-				{processLine(); return '-';}
+~				{processLine(); return '~';}
+!				{processLine(); return '!';}
+\/				{processLine(); return '/';}
+%				{processLine(); return '%';}
+\<\<				{processLine(); return SHL;}
+>>				{processLine(); return SHR;}
+\<				{processLine(); return '<';}
+>				{processLine(); return '>';}
+\<=				{processLine(); return LTEQ;}
+>=				{processLine(); return GTEQ;}
+==				{processLine(); return EQEQ;}
+!=				{processLine(); return NOTEQ;}
+\^				{processLine(); return '^';}
+\|				{processLine(); return '|';}
+&&				{processLine(); return LOGAND;}
+\|\|				{processLine(); return LOGOR;}
+\?				{processLine(); return '?';}
+:				{processLine(); return ':';}
+;				{processLine(); return ';';}
+\.\.\.				{processLine(); return ELLIPSIS;}
+=				{processLine(); return '=';}
+\*=				{processLine(); return TIMESEQ;}
+\/=				{processLine(); return DIVEQ;}
+%=				{processLine(); return MODEQ;}
+\+=				{processLine(); return PLUSEQ;}
+\-=				{processLine(); return MINUSEQ;}
+\<\<=				{processLine(); return SHLEQ;}
+>>=				{processLine(); return SHREQ;}
+&=				{processLine(); return ANDEQ;}
+\^=				{processLine(); return XOREQ;}
+\|=				{processLine(); return OREQ;}
+,				{processLine(); return ',';}
+#|%:				{processLine(); return '#';}
+##|%:%:				{processLine(); return OCTOCT;}
 
 \r?\n				{currLine++;}
 <*>[ \t]			{;}
