@@ -14,6 +14,8 @@ CC = gcc
 LEX = flex
 BISON = bison
 
+all: lexer parser
+
 lexer: $(OBJS) lextest.c
 	$(CC) lextest.c $(CFLAGS) $(OBJS) -o build/$@ $(LDFLAGS)
 
