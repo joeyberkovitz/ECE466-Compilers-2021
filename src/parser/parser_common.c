@@ -7,6 +7,7 @@ void yyerror(char const* s){
 }
 
 void printAst(struct astnode_hdr *hdr, int lvl){
+    union astnode *node = (union astnode*) hdr;
     //TODO: print tabs for level indication
     switch (hdr->type) {
         case NODE_LEXCTR:
@@ -15,6 +16,20 @@ void printAst(struct astnode_hdr *hdr, int lvl){
         case NODE_LEX:
             break;
         case NODE_BINOP:
+            printf("Got binop: \n");
+            printAst((struct astnode_hdr *) node->binNode->left, lvl + 1);
+            printAst((struct astnode_hdr *) node->binNode->right, lvl + 1);
+            break;
+        case NODE_LST:
+            printf("Got list: \n");
+            for(int i = 0; i < node->lst->numVals; i++){
+                printAst((struct astnode_hdr *) node->lst->els[i], lvl + 1);
+            }
+            break;
+        case NODE_FNCN:
+            printf("Got fncn: \n");
+            printAst((struct astnode_hdr *) node->fncn->name, lvl + 1);
+            printAst((struct astnode_hdr *) node->fncn->lst, lvl + 1);
             break;
     }
 }
@@ -34,4 +49,36 @@ struct astnode_hdr* allocBinop(struct astnode_hdr *left, struct astnode_hdr *rig
     retNode->right = (union astnode *) right;
     retNode->op = opType;
     return (struct astnode_hdr *) retNode;
+}
+
+struct astnode_lst* allocList(struct astnode_hdr *el){
+    struct astnode_lst *lst = malloc(sizeof(struct astnode_lst));
+    lst->type = NODE_LST;
+    if(el == NULL) {
+        lst->numVals = 0;
+        lst->els = NULL;
+    }
+    else{
+        lst->numVals = 1;
+        lst->els = malloc(sizeof(union astnode*));
+        lst->els[0] = (union astnode *) el;
+    }
+    return lst;
+}
+
+
+void addToList(struct astnode_lst *lst, struct astnode_hdr *el){
+    lst->numVals++;
+    lst->els = realloc(lst->els, sizeof(union astnode*)*lst->numVals);
+    lst->els[lst->numVals-1] = (union astnode *) el;
+}
+
+struct astnode_hdr* allocFunc(struct astnode_hdr *name, struct astnode_lst *lst){
+    struct astnode_fncn *fncn = malloc(sizeof(struct astnode_fncn));
+
+    fncn->type = NODE_FNCN;
+    fncn->lst = lst;
+    fncn->name = (union astnode *) name;
+
+    return (struct astnode_hdr *) fncn;
 }

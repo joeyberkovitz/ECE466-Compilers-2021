@@ -9,7 +9,7 @@ INC_DIRS := $(shell find $(SRC_DIRS) -type d)
 INC_DIRS += $(addprefix $(BUILD_DIR)/,$(INC_DIRS))
 INC_FLAGS := $(addprefix -I,$(INC_DIRS))
 
-CFLAGS ?= $(INC_FLAGS) -MMD -MP -std=gnu11
+CFLAGS ?= $(INC_FLAGS) -MMD -MP -std=gnu11 -g
 CC = gcc
 LEX = flex
 BISON = bison

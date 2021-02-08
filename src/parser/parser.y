@@ -13,6 +13,8 @@
 %type  <hdr> expression
 %type  <hdr> primary-expression
 %type  <hdr> postfix-expression
+%type  <hdr> assignment-expression
+%type  <lst> argument-expression-list
 
 %% /* Grammar */
 
@@ -47,14 +49,14 @@ postfix-expression:
         primary-expression                      {$$ = $1;}
         /* TODO: check types; Array subscripting: $1 should be pointer, $3 should be offset */
     |   postfix-expression '[' expression ']'   {$$ = allocBinop($1, $3, '+');}
-    |   postfix-expression '(' argument-expression-list ')' {$$ = allocFunc($1, $3)}
+    |   postfix-expression '(' argument-expression-list ')' {$$ = allocFunc($1, $3);}
     ;
 
 argument-expression-list:
-        assignment-expression
-    |   argument-expression-list ',' assignment-expression
-    |
-    ;
+        assignment-expression                               {$$ = allocList($1); }
+    |   argument-expression-list ',' assignment-expression  {$$ = $1; addToList($1, $3); }
+    |                                                       {$$ = allocList(NULL);}
+;
 
 assignment-expression:
     expression;
