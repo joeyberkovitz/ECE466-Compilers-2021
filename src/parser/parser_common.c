@@ -51,6 +51,14 @@ struct astnode_hdr* allocBinop(struct astnode_hdr *left, struct astnode_hdr *rig
     return (struct astnode_hdr *) retNode;
 }
 
+struct astnode_lst* allocUnop(struct astnode_hdr *opand, int opType){
+    struct astnode_unop *retNode = malloc(sizeof(struct astnode_unop));
+    retNode->type = NODE_UNOP;
+    retNode->opand = (union astnode *) opand;
+    retNode->op = opType;
+    return (struct astnode_hdr *) retNode;
+}
+
 struct astnode_lst* allocList(struct astnode_hdr *el){
     struct astnode_lst *lst = malloc(sizeof(struct astnode_lst));
     lst->type = NODE_LST;

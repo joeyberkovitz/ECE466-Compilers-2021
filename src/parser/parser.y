@@ -10,6 +10,9 @@
 %token <lexNode> NUMBER
 %token <lexNode> CHARLIT
 %token <lexNode> STRING
+%token <lexNode> INDSEL
+%token <lexNode> PLUSPLUS
+%token <lexNode> MINUSMINUS
 %type  <hdr> expression
 %type  <hdr> primary-expression
 %type  <hdr> postfix-expression
@@ -50,6 +53,11 @@ postfix-expression:
         /* TODO: check types; Array subscripting: $1 should be pointer, $3 should be offset */
     |   postfix-expression '[' expression ']'   {$$ = allocBinop($1, $3, '+');}
     |   postfix-expression '(' argument-expression-list ')' {$$ = allocFunc($1, $3);}
+    |   postfix-expression '.' IDENT    {$$ = allocBinop($1, allocLexCtr($3, IDENT), '.');}
+    |   postfix-expression INDSEL IDENT    {$$ = allocBinop(allocUnop($1, '*'), IDNET, '.');}
+    |   postfix-expression PLUSPLUS    {$$ = allocUnop($1, PLUSPLUS);}
+    |   postfix-expression MINUSMINUS    {$$ = allocUnop($1, MINUSMINUS);}
+    |
     ;
 
 argument-expression-list:
