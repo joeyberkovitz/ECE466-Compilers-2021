@@ -7,7 +7,7 @@ extern unsigned int currStrLen;
 
 int print_esc_str(FILE *stream, const struct printf_info *info, const void *const *args){
 	const struct LexVal *lexVal;
-	lexVal = (*((const union astnode **)(args[0])))->lexNode;
+	lexVal = *((const struct LexVal **)(args[0]));
 	
 	int printLen = 0;
 	for(int i = 0; i < lexVal->len - 1; i++){
