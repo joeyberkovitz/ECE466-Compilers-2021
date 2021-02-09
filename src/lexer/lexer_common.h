@@ -73,7 +73,7 @@ struct astnode_lex {
 struct astnode_binop {
     enum node_type type;
     int op;
-    union astnode *left, *right;
+    struct astnode_hdr *left, *right;
 };
 
 struct astnode_unop {
@@ -85,12 +85,12 @@ struct astnode_unop {
 struct astnode_lst {
     enum node_type type;
     int numVals;
-    union astnode** els;
+    struct astnode_hdr** els;
 };
 
 struct astnode_fncn {
     enum node_type type;
-    union astnode *name;
+    struct astnode_hdr *name;
     struct astnode_lst *lst;
 };
 
