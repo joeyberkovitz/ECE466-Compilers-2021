@@ -16,8 +16,9 @@
 enum node_type {
     NODE_LEX,
     NODE_LEXCTR,
-    NODE_BINOP,
     NODE_UNOP,
+    NODE_BINOP,
+    NODE_TEROP,
     NODE_LST,
     NODE_FNCN
 };
@@ -52,6 +53,7 @@ typedef union {
 
 struct LexVal {
     enum node_type type;
+    int sym;
 	char *file;
 	int line;
 	int len;
@@ -70,16 +72,21 @@ struct astnode_lex {
     struct LexVal *lexVal;
 };
 
+struct astnode_unop {
+    enum node_type type;
+    int op;
+    union astnode *opand;
+}
+
 struct astnode_binop {
     enum node_type type;
     int op;
     struct astnode_hdr *left, *right;
 };
 
-struct astnode_unop {
+struct astnode_terop {
     enum node_type type;
-    int op;
-    union astnode *opand;
+    struct astnode_hdr *first, *second, *third;
 }
 
 struct astnode_lst {
@@ -97,7 +104,9 @@ struct astnode_fncn {
 union astnode {
     struct astnode_hdr *hdr;
     struct LexVal *lexNode;
+    struct astnode_unop *unNode;
     struct astnode_binop *binNode;
+    struct astnode_terop *terNode;
     struct astnode_lex *lexCtr;
     struct astnode_lst *lst;
     struct astnode_fncn *fncn;

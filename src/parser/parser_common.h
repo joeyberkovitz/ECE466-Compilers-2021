@@ -9,8 +9,13 @@ void yyerror(char const*);
 void printAst(struct astnode_hdr *hdr, int lvl);
 
 struct astnode_hdr*  allocLexCtr(struct LexVal *inNode, int tokNum);
-struct astnode_hdr*  allocBinop(struct astnode_hdr *left, struct astnode_hdr *right, int opType);
+
 struct astnode_hdr*  allocUnop(struct astnode_hdr *opand, int opType);
+struct astnode_hdr*  allocBinop(struct astnode_hdr *left, struct astnode_hdr *right, int opType);
+struct astnode_hdr*  allocTerop(struct astnode_hdr *first, struct astnode_hdr *second, struct astnode_hdr *third);
+
+struct astnode_hdr*  allocPostIncDec(struct LexVal *op, struct astnode_hdr *opand, int opType);
+struct astnode_hdr*  allocAssignment(struct astnode_hdr *left, struct astnode_hdr *right, int opType);
 
 struct astnode_lst* allocList(struct astnode_hdr *el);
 void addToList(struct astnode_lst *lst, struct astnode_hdr *el);
