@@ -12,43 +12,40 @@ void printAst(struct astnode_hdr *hdr, int lvl){
         printf("  ");
 
     switch (hdr->type) {
-        case NODE_LEXCTR:
-            switch (hdr->tokenNum) {
+        case NODE_LEX:
+            switch (node->lexNode->sym) {
                 case IDENT:
-                    printf("IDENT  %s\n", hdr->lexVal->value.string_val); break;
+                    printf("IDENT  %s\n", node->lexNode->value.string_val); break;
                 case NUMBER:
-                    switch (hdr->lexVal->flags) {
+                    switch (node->lexNode->flags) {
                         case int_type: 
-                            printf("CONSTANT:  (type=int)%lld\n", hdr->lexVal->value.num_val.integer_val); break;
+                            printf("CONSTANT:  (type=int)%lld\n", node->lexNode->value.num_val.integer_val); break;
                         case uint_type: 
-                            printf("CONSTANT:  (type=unsigned,int)%lld\n", hdr->lexVal->value.num_val.integer_val); break;
+                            printf("CONSTANT:  (type=unsigned,int)%lld\n", node->lexNode->value.num_val.integer_val); break;
                         case lint_type: 
-                            printf("CONSTANT:  (type=long)%lld\n", hdr->lexVal->value.num_val.integer_val); break;
+                            printf("CONSTANT:  (type=long)%lld\n", node->lexNode->value.num_val.integer_val); break;
                         case ulint_type: 
-                            printf("CONSTANT:  (type=unsigned,long)%lld\n", hdr->lexVal->value.num_val.integer_val); break;
+                            printf("CONSTANT:  (type=unsigned,long)%lld\n", node->lexNode->value.num_val.integer_val); break;
                         case llint_type: 
-                            printf("CONSTANT:  (type=longlong)%lld\n", hdr->lexVal->value.num_val.integer_val); break;
+                            printf("CONSTANT:  (type=longlong)%lld\n", node->lexNode->value.num_val.integer_val); break;
                         case ullint_type: 
-                            printf("CONSTANT:  (type=unsigned,longlong)%lld\n", hdr->lexVal->value.num_val.integer_val); break;
+                            printf("CONSTANT:  (type=unsigned,longlong)%lld\n", node->lexNode->value.num_val.integer_val); break;
                         case float_type: 
-                            printf("CONSTANT:  (type=float)%g\n", hdr->lexVal->value.num_val.float_val); break;
+                            printf("CONSTANT:  (type=float)%g\n", node->lexNode->value.num_val.float_val); break;
                         case double_type: 
-                            printf("CONSTANT:  (type=double)%g\n", hdr->lexVal->value.num_val.double_val); break;
+                            printf("CONSTANT:  (type=double)%g\n", node->lexNode->value.num_val.double_val); break;
                         case ldouble_type: 
-                            printf("CONSTANT:  (type=longdouble)%Lg\n", hdr->lexVal->value.num_val.ldouble_val); break;
+                            printf("CONSTANT:  (type=longdouble)%Lg\n", node->lexNode->value.num_val.ldouble_val); break;
                     }
                     break;
                 case CHARLIT:
-                    printf("CONSTANT:  (type=int)%d\n", hdr->lexVal->value.string_val); break;
+                    printf("CONSTANT:  (type=int)%d\n", node->lexNode->value.string_val[0]); break;
                 case STRING:
-                    printf("STRING  %S\n", (wchar_t *) hdr->lexVal); break;
+                    printf("STRING  %S\n", (wchar_t *) node->lexNode); break;
             }
-            printLex(((struct astnode_lex*)hdr)->lexVal, ((struct astnode_lex*)hdr)->tokenNum);
-            break;
-        case NODE_LEX:
             break;
         case NODE_UNOP:
-            switch (hdr->op) {
+            switch (node->unNode->op) {
                 case PLUSPLUS:
                     printf("UNARY  OP  POSTINC\n"); break;
                 case MINUSMINUS:
@@ -60,13 +57,12 @@ void printAst(struct astnode_hdr *hdr, int lvl){
                 case SIZEOF:
                     printf("SIZEOF\n"); break;
                 default:
-                    printf("UNARY  OP  %c\n", hdr->op);
+                    printf("UNARY  OP  %c\n", node->unNode->op);
             }
-            printf("Got unop:\n");
-            printAst((struct astnode_hdr *) node->opNode->opand, lvl + 1);
+            printAst((struct astnode_hdr *) node->unNode->opand, lvl + 1);
             break;
         case NODE_BINOP:
-            switch (hdr->op) {
+            switch (node->binNode->op) {
                 case '.':
                     printf("SELECT\n"); break;
                 case SHL:
@@ -92,22 +88,20 @@ void printAst(struct astnode_hdr *hdr, int lvl){
                 case '=':
                     printf("ASSIGNMENT\n"); break;
                 default:
-                    printf("BINARY  OP  %c\n", hdr->op);
+                    printf("BINARY  OP  %c\n", node->binNode->op);
             }
-            printf("Got binop: \n");
-            printAst((struct astnode_hdr *) node->binNode->left, lvl + 1);
-            printAst((struct astnode_hdr *) node->binNode->right, lvl + 1);
+            printAst(node->binNode->left, lvl + 1);
+            printAst(node->binNode->right, lvl + 1);
             break;
         case NODE_TEROP:
-            printf("TERNARY  OP,  IF:\n")
-            printAst((struct astnode_hdr *) node->terNode->first, lvl + 1);
+            printf("TERNARY  OP,  IF:\n");
+            printAst(node->terNode->first, lvl + 1);
             printf("THEN:\n");
-            printAst((struct astnode_hdr *) node->terNode->second, lvl + 1);
+            printAst(node->terNode->second, lvl + 1);
             printf("ELSE:\n");
-            printAst((struct astnode_hdr *) node->terNode->third, lvl + 1);
+            printAst(node->terNode->third, lvl + 1);
             break;
         case NODE_LST:
-            printf("Got list: \n");
             for(int i = 0; i < node->lst->numVals; i++){
                 printf("arg  #%d=\n", i);
                 printAst(node->lst->els[i], lvl + 1);
@@ -115,22 +109,13 @@ void printAst(struct astnode_hdr *hdr, int lvl){
             break;
         case NODE_FNCN:
             printf("FNCALL,  %d  arguments\n", node->fncn->lst->numVals);
-            printf("Got fncn: \n");
-            printAst((struct astnode_hdr *) node->fncn->name, lvl + 1);
+            printAst(node->fncn->name, lvl + 1);
             printAst((struct astnode_hdr *) node->fncn->lst, lvl + 1);
             break;
     }
 }
 
-struct astnode_hdr* allocLexCtr(struct LexVal *inNode, int tokNum){
-    struct astnode_lex *retNode = malloc(sizeof(struct astnode_lex));
-    retNode->type = NODE_LEXCTR;
-    retNode->lexVal = inNode;
-    retNode->tokenNum = tokNum;
-    return (struct astnode_hdr *) retNode;
-}
-
-struct astnode_lst* allocUnop(struct astnode_hdr *opand, int opType){
+struct astnode_hdr* allocUnop(struct astnode_hdr *opand, int opType){
     struct astnode_unop *retNode = malloc(sizeof(struct astnode_unop));
     retNode->type = NODE_UNOP;
     retNode->opand = opand;
@@ -156,20 +141,21 @@ struct astnode_hdr* allocTerop(struct astnode_hdr *first, struct astnode_hdr *se
     return (struct astnode_hdr *) retNode;
 }
 
-struct astnode_lst* allocPostIncDec(struct LexVal *op, struct astnode_hdr *opand, int opType){
+struct astnode_hdr* allocPostIncDec(struct LexVal *op, struct astnode_hdr *opand, int opType){
     struct LexVal *lexVal = malloc(sizeof(struct LexVal));
     lexVal->type = NODE_LEX;
     lexVal->file = op->file;
     lexVal->line = op->line;
     lexVal->flags = int_type;
     lexVal->value.num_val.integer_val = 1;
+    lexVal->sym = NUMBER;
 
-    return (struct astnode_hdr *) allocBinop(opand, allocBinop(opand, allocLexCtr(lexVal, NUMBER), opType), '=')
+    return (struct astnode_hdr *) allocBinop(opand, allocBinop(opand, (struct astnode_hdr *) lexVal, opType), '=');
 }
 
-struct astnode_lst* allocAssignment(struct astnode_hdr *left, struct astnode_hdr *right, int opType){
-    if(opType != '=') {
-        switch (opType) {
+struct astnode_hdr* allocAssignment(struct astnode_hdr *left, struct astnode_hdr *right, struct LexVal *opType){
+    if(opType->sym != '=') {
+        switch (opType->sym) {
             case TIMESEQ:
                 right = allocBinop(left, right, '*'); break; 
             case DIVEQ:

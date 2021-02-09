@@ -35,7 +35,7 @@ $(BUILD_DIR)/%.l.o: %.l $(BUILD_DIR)/$(SRC_DIRS)/parser/parser.y.o
 	$(CC) $(CFLAGS) -c $@.c -o $@
 
 # c source
-$(BUILD_DIR)/%.c.o: %.c
+$(BUILD_DIR)/%.c.o: %.c $(BUILD_DIR)/$(SRC_DIRS)/lexer/lexer.l.o
 	$(MKDIR_P) $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 

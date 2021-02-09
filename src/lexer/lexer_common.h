@@ -15,7 +15,6 @@
 #define hasFlag(x, flag)	((x & flag) == flag)
 enum node_type {
     NODE_LEX,
-    NODE_LEXCTR,
     NODE_UNOP,
     NODE_BINOP,
     NODE_TEROP,
@@ -66,17 +65,11 @@ struct astnode_hdr{
     enum node_type type;
 };
 
-struct astnode_lex {
-    enum node_type type;
-    int tokenNum;
-    struct LexVal *lexVal;
-};
-
 struct astnode_unop {
     enum node_type type;
     int op;
-    union astnode *opand;
-}
+    struct astnode_hdr *opand;
+};
 
 struct astnode_binop {
     enum node_type type;
@@ -87,7 +80,7 @@ struct astnode_binop {
 struct astnode_terop {
     enum node_type type;
     struct astnode_hdr *first, *second, *third;
-}
+};
 
 struct astnode_lst {
     enum node_type type;
@@ -107,7 +100,6 @@ union astnode {
     struct astnode_unop *unNode;
     struct astnode_binop *binNode;
     struct astnode_terop *terNode;
-    struct astnode_lex *lexCtr;
     struct astnode_lst *lst;
     struct astnode_fncn *fncn;
 };

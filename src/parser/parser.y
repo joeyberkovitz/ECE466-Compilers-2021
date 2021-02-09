@@ -200,8 +200,8 @@ postfix-expression:
         /* TODO: check types; Array subscripting: $1 should be pointer, $3 should be offset */
     |   postfix-expression '[' expression ']'               {$$ = allocBinop($1, $3, '+');}
     |   postfix-expression '(' argument-expression-list ')' {$$ = allocFunc($1, $3);}
-    |   postfix-expression '.' IDENT                        {$$ = allocBinop($1, allocLexCtr($3, IDENT), '.');}
-    |   postfix-expression INDSEL IDENT                     {$$ = allocBinop(allocUnop($1, '*'), IDENT, '.');}
+    |   postfix-expression '.' IDENT                        {$3->sym = IDENT; $$ = allocBinop($1, (struct astnode_hdr*)$3, '.');}
+    |   postfix-expression INDSEL IDENT                     {$$ = allocBinop(allocUnop($1, '*'), (struct astnode_hdr*)$3, '.');}
     |   postfix-expression PLUSPLUS                         {$$ = allocUnop($1, PLUSPLUS);}
     |   postfix-expression MINUSMINUS                       {$$ = allocUnop($1, MINUSMINUS);}
         /* TODO: compound literals; once we have type-names */
@@ -210,15 +210,16 @@ postfix-expression:
 argument-expression-list:
         assignment-expression                               {$$ = allocList($1); }
     |   argument-expression-list ',' assignment-expression  {$$ = $1; addToList($1, $3); }
+        /*TODO: Possible edge case - list may already exist and this is an empty element */
     |                                                       {$$ = allocList(NULL);}
     ;
 
     /* 6.5.1 - Primary expressions */
 primary-expression:
-        IDENT                   {$$ = allocLexCtr($1, IDENT);}
-    |   NUMBER                  {$$ = allocLexCtr($1, NUMBER);}
-    |   CHARLIT                 {$$ = allocLexCtr($1, CHARLIT);}
-    |   STRING                  {$$ = allocLexCtr($1, STRING);}
+        IDENT                   {$1->sym = IDENT; $$ = (struct astnode_hdr*)$1;}
+    |   NUMBER                  {$1->sym = NUMBER; $$ = (struct astnode_hdr*)$1;}
+    |   CHARLIT                 {$1->sym = CHARLIT; $$ = (struct astnode_hdr*)$1;}
+    |   STRING                  {$1->sym = STRING; $$ = (struct astnode_hdr*)$1;}
     |   '(' expression ')'      {$$ = $2;} /* throw away parentheses */
     ;
 
