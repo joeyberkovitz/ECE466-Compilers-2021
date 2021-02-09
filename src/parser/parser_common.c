@@ -6,10 +6,14 @@ void yyerror(char const* s){
 	fprintf(stderr, "Got error: %s\n", s);
 }
 
-void printAst(struct astnode_hdr *hdr, int lvl){
-    union astnode *node = (union astnode*) &hdr;
+void printTabs(int lvl){
     for(int i = 0; i < lvl; i++)
         printf("  ");
+}
+
+void printAst(struct astnode_hdr *hdr, int lvl){
+    union astnode *node = (union astnode*) &hdr;
+    printTabs(lvl);
 
     switch (hdr->type) {
         case NODE_LEX:
@@ -103,6 +107,9 @@ void printAst(struct astnode_hdr *hdr, int lvl){
             break;
         case NODE_LST:
             for(int i = 0; i < node->lst->numVals; i++){
+                if(i > 0)
+                    printTabs(lvl);
+
                 printf("arg  #%d=\n", i + 1);
                 printAst(node->lst->els[i], lvl + 1);
             }
