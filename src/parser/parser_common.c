@@ -117,9 +117,12 @@ void printAst(struct astnode_hdr *hdr, int lvl){
         case NODE_FNCN:
             printf("FNCALL,  %d  arguments\n", node->fncn->lst->numVals);
             printAst(node->fncn->name, lvl + 1);
-            printAst((struct astnode_hdr *) node->fncn->lst, lvl + 1);
+            printAst((struct astnode_hdr *) node->fncn->lst, lvl);
             break;
     }
+
+    if(lvl == 0 && hdr->type != NODE_LST)
+        printf("\n");
 }
 
 struct astnode_hdr* allocUnop(struct astnode_hdr *opand, int opType){
