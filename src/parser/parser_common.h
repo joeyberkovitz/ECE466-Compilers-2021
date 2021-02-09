@@ -6,6 +6,7 @@
 int yylex(void);
 void yyerror(char const*);
 
+void printTabs(int lvl);
 void printAst(struct astnode_hdr *hdr, int lvl);
 
 struct astnode_hdr*  allocUnop(struct astnode_hdr *opand, int opType);
