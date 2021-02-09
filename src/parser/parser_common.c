@@ -103,7 +103,7 @@ void printAst(struct astnode_hdr *hdr, int lvl){
             break;
         case NODE_LST:
             for(int i = 0; i < node->lst->numVals; i++){
-                printf("arg  #%d=\n", i);
+                printf("arg  #%d=\n", i + 1);
                 printAst(node->lst->els[i], lvl + 1);
             }
             break;

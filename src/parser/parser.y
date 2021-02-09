@@ -201,7 +201,7 @@ postfix-expression:
     |   postfix-expression '[' expression ']'               {$$ = allocBinop($1, $3, '+');}
     |   postfix-expression '(' argument-expression-list ')' {$$ = allocFunc($1, $3);}
     |   postfix-expression '.' IDENT                        {$3->sym = IDENT; $$ = allocBinop($1, (struct astnode_hdr*)$3, '.');}
-    |   postfix-expression INDSEL IDENT                     {$$ = allocBinop(allocUnop($1, '*'), (struct astnode_hdr*)$3, '.');}
+    |   postfix-expression INDSEL IDENT                     {$3->sym = IDENT; $$ = allocBinop(allocUnop($1, '*'), (struct astnode_hdr*)$3, '.');}
     |   postfix-expression PLUSPLUS                         {$$ = allocUnop($1, PLUSPLUS);}
     |   postfix-expression MINUSMINUS                       {$$ = allocUnop($1, MINUSMINUS);}
         /* TODO: compound literals; once we have type-names */
