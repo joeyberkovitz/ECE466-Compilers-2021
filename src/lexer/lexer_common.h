@@ -17,6 +17,7 @@ enum node_type {
     NODE_LEX,
     NODE_LEXCTR,
     NODE_BINOP,
+    NODE_UNOP,
     NODE_LST,
     NODE_FNCN
 };
@@ -74,6 +75,12 @@ struct astnode_binop {
     int op;
     union astnode *left, *right;
 };
+
+struct astnode_unop {
+    enum node_type type;
+    int op;
+    union astnode *opand;
+}
 
 struct astnode_lst {
     enum node_type type;
