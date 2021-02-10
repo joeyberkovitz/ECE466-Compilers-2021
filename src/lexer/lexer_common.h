@@ -106,6 +106,8 @@ union astnode {
 
 union astnode yylval;
 
+void *mallocSafeLex(size_t size);
+
 void allocLex();
 
 int print_esc_str(FILE *stream, const struct printf_info *info, const void *const *args);

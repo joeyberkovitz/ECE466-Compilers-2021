@@ -1,9 +1,18 @@
 #include "parser_common.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 extern int currLine;
 extern char currFile[];
 
+void *mallocSafe(size_t size){
+    void *ret = malloc(size);
+    if(ret == NULL){
+        yyerror("parser failed to malloc");
+        exit(-1);
+    }
+    return ret;
+}
 
 void yyerror(char const* s){
     fprintf(stderr, "%s:%d: Error: %s\n", currFile, currLine, s);
@@ -129,7 +138,7 @@ void printAst(struct astnode_hdr *hdr, int lvl){
 }
 
 struct astnode_hdr* allocUnop(struct astnode_hdr *opand, int opType){
-    struct astnode_unop *retNode = malloc(sizeof(struct astnode_unop));
+    struct astnode_unop *retNode = mallocSafe(sizeof(struct astnode_unop));
     retNode->type = NODE_UNOP;
     retNode->opand = opand;
     retNode->op = opType;
@@ -137,7 +146,7 @@ struct astnode_hdr* allocUnop(struct astnode_hdr *opand, int opType){
 }
 
 struct astnode_hdr* allocBinop(struct astnode_hdr *left, struct astnode_hdr *right, int opType){
-    struct astnode_binop *retNode = malloc(sizeof(struct astnode_binop));
+    struct astnode_binop *retNode = mallocSafe(sizeof(struct astnode_binop));
     retNode->type = NODE_BINOP;
     retNode->left = left;
     retNode->right = right;
@@ -146,7 +155,7 @@ struct astnode_hdr* allocBinop(struct astnode_hdr *left, struct astnode_hdr *rig
 }
 
 struct astnode_hdr* allocTerop(struct astnode_hdr *first, struct astnode_hdr *second, struct astnode_hdr *third){
-    struct astnode_terop *retNode = malloc(sizeof(struct astnode_terop));
+    struct astnode_terop *retNode = mallocSafe(sizeof(struct astnode_terop));
     retNode->type = NODE_TEROP;
     retNode->first = first;
     retNode->second = second;
@@ -155,7 +164,7 @@ struct astnode_hdr* allocTerop(struct astnode_hdr *first, struct astnode_hdr *se
 }
 
 struct astnode_hdr* allocPostIncDec(struct LexVal *op, struct astnode_hdr *opand, int opType){
-    struct LexVal *lexVal = malloc(sizeof(struct LexVal));
+    struct LexVal *lexVal = mallocSafe(sizeof(struct LexVal));
     lexVal->type = NODE_LEX;
     lexVal->file = op->file;
     lexVal->line = op->line;
@@ -196,7 +205,7 @@ struct astnode_hdr* allocAssignment(struct astnode_hdr *left, struct astnode_hdr
 }
 
 struct astnode_lst* allocList(struct astnode_hdr *el){
-    struct astnode_lst *lst = malloc(sizeof(struct astnode_lst));
+    struct astnode_lst *lst = mallocSafe(sizeof(struct astnode_lst));
     lst->type = NODE_LST;
     if(el == NULL) {
         lst->numVals = 0;
@@ -204,7 +213,7 @@ struct astnode_lst* allocList(struct astnode_hdr *el){
     }
     else{
         lst->numVals = 1;
-        lst->els = malloc(sizeof(union astnode));
+        lst->els = mallocSafe(sizeof(union astnode));
         lst->els[0] = el;
     }
     return lst;
@@ -218,7 +227,7 @@ void addToList(struct astnode_lst *lst, struct astnode_hdr *el){
 }
 
 struct astnode_hdr* allocFunc(struct astnode_hdr *name, struct astnode_lst *lst){
-    struct astnode_fncn *fncn = malloc(sizeof(struct astnode_fncn));
+    struct astnode_fncn *fncn = mallocSafe(sizeof(struct astnode_fncn));
 
     fncn->type = NODE_FNCN;
     fncn->lst = lst;

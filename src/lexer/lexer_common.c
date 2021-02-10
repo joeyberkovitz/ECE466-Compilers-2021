@@ -5,6 +5,15 @@ extern char currFile[];
 extern char *currStr;
 extern unsigned int currStrLen;
 
+void *mallocSafeLex(size_t size){
+    void *ret = malloc(size);
+    if(ret == NULL){
+        fprintf(stderr, "%s:%d: Error: lexer failed to malloc\n", currFile, currLine);
+        exit(-1);
+    }
+    return ret;
+}
+
 int print_esc_str(FILE *stream, const struct printf_info *info, const void *const *args){
 	const struct LexVal *lexVal;
 	lexVal = *((const struct LexVal **)(args[0]));
@@ -50,7 +59,7 @@ int print_esc_strinfo(const struct printf_info *info, size_t n, int *argtypes, i
 }
 
 void allocLex(){
-    yylval.lexNode = malloc(sizeof(struct LexVal));
+    yylval.lexNode = mallocSafeLex(sizeof(struct LexVal));
     yylval.lexNode->type = NODE_LEX;
 }
 
@@ -61,7 +70,7 @@ void processLine(){
 }
 
 void setStr(union astnode val, char *txt, size_t len){
-	val.lexNode->value.string_val = malloc(len+1);
+	val.lexNode->value.string_val = mallocSafeLex(len+1);
 	
 	if(val.lexNode->value.string_val == NULL){
 		fprintf(stderr, "Failed to allocate pointer for LexVal string");
@@ -150,7 +159,7 @@ void resetString(){
 }
 
 void initString(){
-	currStr = malloc(1);
+	currStr = mallocSafeLex(1);
 	currStrLen = 1;
 }
 

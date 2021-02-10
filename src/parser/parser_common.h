@@ -5,6 +5,7 @@
 
 int yylex(void);
 void yyerror(char const*);
+void* mallocSafe(size_t size);
 
 void printTabs(int lvl);
 void printAst(struct astnode_hdr *hdr, int lvl);
