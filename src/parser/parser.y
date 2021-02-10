@@ -200,6 +200,7 @@ postfix-expression:
         /* TODO: check types; Array subscripting: $1 should be pointer, $3 should be offset */
     |   postfix-expression '[' expression ']'               {$$ = allocBinop($1, $3, '+');}
     |   postfix-expression '(' argument-expression-list ')' {$$ = allocFunc($1, $3);}
+    |   postfix-expression '(' ')'                          {$$ = allocFunc($1, allocList(NULL));}
     |   postfix-expression '.' IDENT                        {$3->sym = IDENT; $$ = allocBinop($1, (struct astnode_hdr*)$3, '.');}
     |   postfix-expression INDSEL IDENT                     {$3->sym = IDENT; $$ = allocBinop(allocUnop($1, '*'), (struct astnode_hdr*)$3, '.');}
     |   postfix-expression PLUSPLUS                         {$$ = allocUnop($1, PLUSPLUS);}
@@ -210,8 +211,6 @@ postfix-expression:
 argument-expression-list:
         assignment-expression                               {$$ = allocList($1); }
     |   argument-expression-list ',' assignment-expression  {$$ = $1; addToList($1, $3); }
-        /*TODO: Possible edge case - list may already exist and this is an empty element */
-    |                                                       {$$ = allocList(NULL);}
     ;
 
     /* 6.5.1 - Primary expressions */
