@@ -131,8 +131,6 @@ int main(int argc, char *argv[]) {
 			case XOREQ: printf("%s\t%d\tXOREQ\n", yylval.lexNode->file, yylval.lexNode->line); break;
 			case OREQ: printf("%s\t%d\tOREQ\n", yylval.lexNode->file, yylval.lexNode->line); break;
 			case ',': printf("%s\t%d\t,\n", yylval.lexNode->file, yylval.lexNode->line); break;
-			case '#': printf("%s\t%d\t#\n", yylval.lexNode->file, yylval.lexNode->line); break;
-			case OCTOCT: printf("%s\t%d\tOCTOCT\n", yylval.lexNode->file, yylval.lexNode->line); break;
 		
 			//EOF
 			case TOKEOF: break;

@@ -118,7 +118,7 @@ void processLine();
 
 void setStr(union astnode val, char *txt, size_t len);
 
-void printWarning(union astnode val, char *txt, int orig_flags);
+void setFlag(union astnode val, int flag, char *txt, int orig_flags);
 
 void setInt(union astnode val, char *txt, int flags, int base);
 

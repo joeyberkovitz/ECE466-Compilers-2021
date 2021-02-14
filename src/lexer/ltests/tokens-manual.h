@@ -67,7 +67,6 @@ enum tokens {
 	_BOOL,
 	_COMPLEX,
 	_IMAGINARY,
-	OCTOCT
 };
 
 #endif

@@ -10,6 +10,7 @@
 	#include <stdlib.h>
 	#include <printf.h>
 
+	#define RET(x) processLine();return x;
 
 	extern union astnode yylval;
 	
@@ -22,14 +23,19 @@
 DIGIT		[0-9]
 NONDIGIT	[A-Za-z_]
 IDCHARS		[0-9A-Za-z_]
-DECIMAL		[1-9][0-9]*
+DECIMAL		[1-9]{DIGIT}*
 OCTAL		0[0-7]*
-EXPONENT	([+-]?[0-9]+)
-HEX		0[Xx][0-9A-Fa-f]+
-HEXSTR		[Xx][0-9A-Fa-f]+
+EXPONENT	([+-]?{DIGIT}+)
+HEXIT		[0-9A-Fa-f]
+HEXSTR		[Xx]{HEXIT}+
+HEX		0{HEXSTR}
 ULONG		([Ll][Uu]|[Uu][Ll])
 LONGLONG	(LL|ll)
 ULONGLONG	((LL|ll)[Uu]|[Uu](LL|ll))
+FLTDEC		{DIGIT}*\.{DIGIT}+([Ee]{EXPONENT})?
+FLTDECEXP	{DIGIT}+(\.|\.?[Ee]{EXPONENT})
+FLTHEX		0[Xx]{HEX}*\.{HEX}+[Pp]{EXPONENT}
+FLTHEXEXP	{HEX}\.?[Pp]{EXPONENT}
 LITCHARS	[ !#$-&(-\[\]-~]
 ESCCHAR		\\['"?\\abfnrtv]
 INVALIDESC	\\[^'"?\\abfnrtv]
@@ -55,43 +61,43 @@ INVALIDESC	\\[^'"?\\abfnrtv]
 
 
 	/* Keywords - 6.4.1 */
-auto				{processLine(); return AUTO;}
-break				{processLine(); return BREAK;}
-case				{processLine(); return CASE;}
-char				{processLine(); return CHAR;}
-const				{processLine(); return CONST;}
-continue			{processLine(); return CONTINUE;}
-default				{processLine(); return DEFAULT;}
-do				{processLine(); return DO;}
-double				{processLine(); return DOUBLE;}
-else				{processLine(); return ELSE;}
-enum				{processLine(); return ENUM;}
-extern				{processLine(); return EXTERN;}
-float				{processLine(); return FLOAT;}
-for				{processLine(); return FOR;}
-goto				{processLine(); return GOTO;}
-if				{processLine(); return IF;}
-inline				{processLine(); return INLINE;}
-int				{processLine(); return INT;}
-long				{processLine(); return LONG;}
-register			{processLine(); return REGISTER;}
-restrict			{processLine(); return RESTRICT;}
-return				{processLine(); return RETURN;}
-short				{processLine(); return SHORT;}
-signed				{processLine(); return SIGNED;}
-sizeof				{processLine(); return SIZEOF;}
-static				{processLine(); return STATIC;}
-struct				{processLine(); return STRUCT;}
-switch				{processLine(); return SWITCH;}
-typedef				{processLine(); return TYPEDEF;}
-union				{processLine(); return UNION;}
-unsigned			{processLine(); return UNSIGNED;}
-void				{processLine(); return VOID;}
-volatile			{processLine(); return VOLATILE;}
-while				{processLine(); return WHILE;}
-_Bool				{processLine(); return _BOOL;}
-_Complex			{processLine(); return _COMPLEX;}
-_Imaginary			{processLine(); return _IMAGINARY;}
+auto				{RET(AUTO)}
+break				{RET(BREAK)}
+case				{RET(CASE)}
+char				{RET(CHAR)}
+const				{RET(CONST)}
+continue			{RET(CONTINUE)}
+default				{RET(DEFAULT)}
+do				{RET(DO)}
+double				{RET(DOUBLE)}
+else				{RET(ELSE)}
+enum				{RET(ENUM)}
+extern				{RET(EXTERN)}
+float				{RET(FLOAT)}
+for				{RET(FOR)}
+goto				{RET(GOTO)}
+if				{RET(IF)}
+inline				{RET(INLINE)}
+int				{RET(INT)}
+long				{RET(LONG)}
+register			{RET(REGISTER)}
+restrict			{RET(RESTRICT)}
+return				{RET(RETURN)}
+short				{RET(SHORT)}
+signed				{RET(SIGNED)}
+sizeof				{RET(SIZEOF)}
+static				{RET(STATIC)}
+struct				{RET(STRUCT)}
+switch				{RET(SWITCH)}
+typedef				{RET(TYPEDEF)}
+union				{RET(UNION)}
+unsigned			{RET(UNSIGNED)}
+void				{RET(VOID)}
+volatile			{RET(VOLATILE)}
+while				{RET(WHILE)}
+_Bool				{RET(_BOOL)}
+_Complex			{RET(_COMPLEX)}
+_Imaginary			{RET(_IMAGINARY)}
 
 
 	/* Identifiers - 6.4.2 */
@@ -121,90 +127,88 @@ _Imaginary			{processLine(); return _IMAGINARY;}
 {HEX}{ULONGLONG}				{int base = 16; processLine(); setInt(yylval, yytext, ullint_type, base); return NUMBER;}
 
 	/* Floats - 6.4.4.2 */
-[0-9]*\.[0-9]+([Ee]{EXPONENT})?				|
-[0-9]+(\.|\.?[Ee]{EXPONENT})				|
-0[Xx][0-9A-Fa-f]*\.[0-9A-Fa-f]+[Pp]{EXPONENT}		|
-0[Xx][0-9A-Fa-f]+\.?[Pp]{EXPONENT}			{processLine(); setFloat(yylval, yytext, double_type); return NUMBER;}
+{FLTDEC}				|
+{FLTDECEXP}				|
+{FLTHEX}				|
+{FLTHEXEXP}				{processLine(); setFloat(yylval, yytext, double_type); return NUMBER;}
 
-[0-9]*\.[0-9]+([Ee]{EXPONENT})?[Ff]			|
-[0-9]+(\.|\.?[Ee]{EXPONENT})[Ff]			|
-0[Xx][0-9A-Fa-f]*\.[0-9A-Fa-f]+[Pp]{EXPONENT}[Ff]	|
-0[Xx][0-9A-Fa-f]+\.?[Pp]{EXPONENT}[Ff]			{processLine(); setFloat(yylval, yytext, float_type); return NUMBER;}
+{FLTDEC}[Ff]				|
+{FLTDECEXP}[Ff]				|
+{FLTHEX}[Ff]				|
+{FLTHEXEXP}[Ff]				{processLine(); setFloat(yylval, yytext, float_type); return NUMBER;}
 
-[0-9]*\.[0-9]+([Ee]{EXPONENT})?[Ll]			|
-[0-9]+(\.|\.?[Ee]{EXPONENT})[Ll]			|
-0[Xx][0-9A-Fa-f]*\.[0-9A-Fa-f]+[Pp]{EXPONENT}[Ll]	|
-0[Xx][0-9A-Fa-f]+\.?[Pp]{EXPONENT}[Ll]			{processLine(); setFloat(yylval, yytext, ldouble_type); return NUMBER;}
+{FLTDEC}[Ll]				|
+{FLTDECEXP}[Ll]				|
+{FLTHEX}[Ll]				|
+{FLTHEXEXP}[Ll]				{processLine(); setFloat(yylval, yytext, ldouble_type); return NUMBER;}
 
 
 	/* Character Constants - 6.4.4.4, String literals - 6.4.5 */
-<INITIAL>\'												{BEGIN(CHAR_CONST); initString();}
-<INITIAL>L\'											{BEGIN(WCHAR_CONST); initString();}
-<INITIAL>\"												{BEGIN(STR_LIT); initString();}
-<INITIAL>L\"											{BEGIN(WSTR_LIT); initString();}
+<INITIAL>\'								{BEGIN(CHAR_CONST); initString();}
+<INITIAL>L\'								{BEGIN(WCHAR_CONST); initString();}
+<INITIAL>\"								{BEGIN(STR_LIT); initString();}
+<INITIAL>L\"								{BEGIN(WSTR_LIT); initString();}
 <CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>[^\\'"\n<<EOF>>]+		{addChars(yytext, yyleng, 0);}
 	/* Note: start at second char - ignore "\" */
-<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>{ESCCHAR}		{addChars(yytext+1, yyleng-1, flag_escaped);}
-<CHAR_CONST,WCHAR_CONST>\"								{addChars("\"", 1, 0);}
-<STR_LIT,WSTR_LIT>\'									{addChars("\'", 1, 0);}
-<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>\\[0-7]{1,3}	{addChars(yytext+1, yyleng-1, flag_octal);}
-<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>\\{HEXSTR}		{addChars(yytext+2, yyleng-2, flag_hex);}
-<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>{INVALIDESC}	{fprintf(stderr, "%s:%d: Warning: Invalid escape character: '%s'\n", currFile, currLine, yytext);}
-<CHAR_CONST,WCHAR_CONST>[\n<<EOF>>]						{BEGIN(INITIAL); resetString(); fprintf(stderr, "%s:%d: Error: missing terminating ' character\n", currFile, currLine);}
-<STR_LIT,WSTR_LIT>[\n<<EOF>>]                           {BEGIN(INITIAL); resetString(); fprintf(stderr, "%s:%d: Error: missing terminating \" character\n", currFile, currLine);}
-<CHAR_CONST,WCHAR_CONST>\'								{BEGIN(INITIAL); if(currStrLen > 1) {processLine(); endChar(yylval); return CHARLIT;} resetString(); fprintf(stderr, "%s:%d: Error: invalid empty character literal\n", currFile, currLine);}
-<STR_LIT,WSTR_LIT>\"									{BEGIN(INITIAL); processLine(); endString(yylval); return STRING;}
+<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>{ESCCHAR}			{addChars(yytext+1, yyleng-1, flag_escaped);}
+<CHAR_CONST,WCHAR_CONST>\"						{addChars("\"", 1, 0);}
+<STR_LIT,WSTR_LIT>\'							{addChars("\'", 1, 0);}
+<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>\\[0-7]{1,3}			{addChars(yytext+1, yyleng-1, flag_octal);}
+<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>\\{HEXSTR}			{addChars(yytext+2, yyleng-2, flag_hex);}
+<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>{INVALIDESC}			{fprintf(stderr, "%s:%d: Warning: Invalid escape character: '%s'\n", currFile, currLine, yytext);}
+<CHAR_CONST,WCHAR_CONST>[\n<<EOF>>]					{BEGIN(INITIAL); resetString(); fprintf(stderr, "%s:%d: Error: missing terminating ' character\n", currFile, currLine);}
+<STR_LIT,WSTR_LIT>[\n<<EOF>>]                           		{BEGIN(INITIAL); resetString(); fprintf(stderr, "%s:%d: Error: missing terminating \" character\n", currFile, currLine);}
+<CHAR_CONST,WCHAR_CONST>\'						{BEGIN(INITIAL); if(currStrLen > 1) {processLine(); endChar(yylval); return CHARLIT;} resetString(); fprintf(stderr, "%s:%d: Error: invalid empty character literal\n", currFile, currLine);}
+<STR_LIT,WSTR_LIT>\"							{BEGIN(INITIAL); processLine(); endString(yylval); return STRING;}
 
 
 	/* Punctuators - 6.4.6 */
-\[|<:				{processLine(); return '[';}
-\]|:>				{processLine(); return ']';}
-\(				{processLine(); return '(';}
-\)				{processLine(); return ')';}
-\{|<%				{processLine(); return '{';}
-\}|%>				{processLine(); return '}';}
-\.				{processLine(); return '.';}
-\->				{processLine(); return INDSEL;}
-\+\+				{processLine(); return PLUSPLUS;}
-\-\-				{processLine(); return MINUSMINUS;}
-&				{processLine(); return '&';}
-\*				{processLine(); return '*';}
-\+				{processLine(); return '+';}
-\-				{processLine(); return '-';}
-~				{processLine(); return '~';}
-!				{processLine(); return '!';}
-\/				{processLine(); return '/';}
-%				{processLine(); return '%';}
-\<\<				{processLine(); return SHL;}
->>				{processLine(); return SHR;}
-\<				{processLine(); return '<';}
->				{processLine(); return '>';}
-\<=				{processLine(); return LTEQ;}
->=				{processLine(); return GTEQ;}
-==				{processLine(); return EQEQ;}
-!=				{processLine(); return NOTEQ;}
-\^				{processLine(); return '^';}
-\|				{processLine(); return '|';}
-&&				{processLine(); return LOGAND;}
-\|\|				{processLine(); return LOGOR;}
-\?				{processLine(); return '?';}
-:				{processLine(); return ':';}
-;				{processLine(); return ';';}
-\.\.\.				{processLine(); return ELLIPSIS;}
-=				{processLine(); return '=';}
-\*=				{processLine(); return TIMESEQ;}
-\/=				{processLine(); return DIVEQ;}
-%=				{processLine(); return MODEQ;}
-\+=				{processLine(); return PLUSEQ;}
-\-=				{processLine(); return MINUSEQ;}
-\<\<=				{processLine(); return SHLEQ;}
->>=				{processLine(); return SHREQ;}
-&=				{processLine(); return ANDEQ;}
-\^=				{processLine(); return XOREQ;}
-\|=				{processLine(); return OREQ;}
-,				{processLine(); return ',';}
-#|%:				{processLine(); return '#';}
-##|%:%:				{processLine(); return OCTOCT;}
+\[|<:				{RET('[')}
+\]|:>				{RET(']')}
+\(				{RET('(')}
+\)				{RET(')')}
+\{|<%				{RET('{')}
+\}|%>				{RET('}')}
+\.				{RET('.')}
+\->				{RET(INDSEL)}
+\+\+				{RET(PLUSPLUS)}
+\-\-				{RET(MINUSMINUS)}
+&				{RET('&')}
+\*				{RET('*')}
+\+				{RET('+')}
+\-				{RET('-')}
+~				{RET('~')}
+!				{RET('!')}
+\/				{RET('/')}
+%				{RET('%')}
+\<\<				{RET(SHL)}
+>>				{RET(SHR)}
+\<				{RET('<')}
+>				{RET('>')}
+\<=				{RET(LTEQ)}
+>=				{RET(GTEQ)}
+==				{RET(EQEQ)}
+!=				{RET(NOTEQ)}
+\^				{RET('^')}
+\|				{RET('|')}
+&&				{RET(LOGAND)}
+\|\|				{RET(LOGOR)}
+\?				{RET('?')}
+:				{RET(':')}
+;				{RET(';')}
+\.\.\.				{RET(ELLIPSIS)}
+=				{RET('=')}
+\*=				{RET(TIMESEQ)}
+\/=				{RET(DIVEQ)}
+%=				{RET(MODEQ)}
+\+=				{RET(PLUSEQ)}
+\-=				{RET(MINUSEQ)}
+\<\<=				{RET(SHLEQ)}
+>>=				{RET(SHREQ)}
+&=				{RET(ANDEQ)}
+\^=				{RET(XOREQ)}
+\|=				{RET(OREQ)}
+,				{RET(',')}
 
 \r?\n				{currLine++;}
 <*>[ \t]			{;}
