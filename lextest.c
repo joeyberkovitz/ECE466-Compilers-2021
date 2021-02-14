@@ -63,8 +63,8 @@ int main(int argc, char *argv[]) {
 			//Identifiers
 			case IDENT: printf("%s\t%d\tIDENT\t%s\n", yylval.lexNode->file, yylval.lexNode->line, yylval.lexNode->value.string_val); break;
 			
-			case STRING: printf("%s\t%d\tSTRING\t%S\n", yylval.lexNode->file, yylval.lexNode->line, (wchar_t *)&yylval); break;
-			case CHARLIT: printf("%s\t%d\tCHARLIT\t%S\n", yylval.lexNode->file, yylval.lexNode->line, (wchar_t *)&yylval); break;
+			case STRING: printf("%s\t%d\tSTRING\t%S\n", yylval.lexNode->file, yylval.lexNode->line, (wchar_t *)yylval.lexNode); break;
+			case CHARLIT: printf("%s\t%d\tCHARLIT\t%S\n", yylval.lexNode->file, yylval.lexNode->line, (wchar_t *)yylval.lexNode); break;
 
 			//Integer/Float Constants
 			case NUMBER:
