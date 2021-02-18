@@ -10,7 +10,8 @@
 	#include <stdlib.h>
 	#include <printf.h>
 
-	#define RET(x) processLine();return x;
+    //TODO: if setting sym here, should also set in places where RET macro isn't used
+	#define RET(x) processLine();yylval.lexNode->sym = x;return x;
 
 	extern union astnode yylval;
 	

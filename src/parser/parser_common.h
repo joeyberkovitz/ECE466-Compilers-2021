@@ -22,4 +22,40 @@ void addToList(struct astnode_lst *lst, struct astnode_hdr *el);
 
 struct astnode_hdr* allocFunc(struct astnode_hdr *name, struct astnode_lst *lst);
 
+enum symtab_type {
+    GENERIC
+};
+
+enum symtab_ns {
+    TAG,
+    LABEL,
+    MEMBER,
+    OTHER
+};
+
+union symtab_entry {
+    struct symtab_entry_generic *generic;
+};
+
+struct symtab_entry_generic {
+    enum symtab_type type;
+    union symtab_entry prev;
+    union symtab_entry next;
+    enum symtab_ns ns;2
+    union astnode *astnode;
+};
+
+struct symtab {
+    enum {
+        SCOPE_FILE,
+        SCOPE_FUNC,
+        SCOPE_BLOCK,
+        SCOPE_PROTO
+    } scope;
+    struct symtab *parent;
+    struct symtab **children; //Array of pointers to direct children - dynamically allocated
+    size_t children_len; //Number of children pointers allocated
+    union symtab_entry entry;
+};
+
 #endif
