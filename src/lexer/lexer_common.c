@@ -70,6 +70,7 @@ void processLine(){
 }
 
 void setStr(union astnode val, char *txt, size_t len){
+    val.lexNode->sym = IDENT;
 	val.lexNode->value.string_val = mallocSafeLex(len+1);
 	
 	if(val.lexNode->value.string_val == NULL){
@@ -89,6 +90,7 @@ void setFlag(union astnode val, int flag, char *txt, int orig_flags){
 void setInt(union astnode val, char *txt, int flags, int base){
 	errno = 0;
 	unsigned long long int num = strtoull(txt, NULL, base);
+	val.lexNode->sym = NUMBER;
 	val.lexNode->value.num_val.integer_val = num;
 
 	//Check table in 6.4.4.1 for order of type progression	
@@ -134,6 +136,7 @@ void setInt(union astnode val, char *txt, int flags, int base){
 }
 
 void setFloat(union astnode val, char *txt, int flags){
+    val.lexNode->sym = NUMBER;
 	if(hasFlag(flags, float_type)){
 		val.lexNode->value.num_val.float_val = strtof(txt, NULL);
 		val.lexNode->flags = float_type;

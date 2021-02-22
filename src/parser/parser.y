@@ -114,6 +114,8 @@
 %initial-action {
     //Space to perform initialization actions at beginning of yyparse()
     //Init file scope symbol table here
+    currTab = symtabCreate(SCOPE_FILE);
+    currDecl.generic = allocEntry(ENTRY_GENERIC);
 };
 
 
@@ -300,10 +302,11 @@ primary-expression:
 
     /* 6.7 - Declarations */
 declaration:
-        declaration-specifiers init-declarator-list ';'
-    |   declaration-specifiers ';'
+        declaration-specifiers init-declarator-list ';'     {clearEntry(currDecl);}
+    |   declaration-specifiers ';'                          {clearEntry(currDecl);}
     ;
 
+    /* No actions to perform here - set in global */
 declaration-specifiers:
         declaration-specifier
     |   declaration-specifiers declaration-specifier
@@ -312,19 +315,19 @@ declaration-specifiers:
 declaration-specifier:
     /* TODO: ensure at most one of each */
     /* TODO: adjustment made from spec - converted to list - check this is valid */
-        storage-class-specifier
-    |   type-specifier
-    |   type-qualifier
+        storage-class-specifier     {setEntrySpec(currDecl, $1, SPEC_STORAGE);}
+    |   type-specifier              {setEntrySpec(currDecl, $1, SPEC_TYPE_SPEC);}
+    |   type-qualifier              {setEntrySpec(currDecl, $1, SPEC_TYPE_QUAL);}
     /* TODO: ignored for assign 3: |   function-specifier */
     ;
 
 init-declarator-list:
-        init-declarator
-    |   init-declarator-list ',' init-declarator
+        init-declarator                             {symtabEnter(currTab, $1, false);}
+    |   init-declarator-list ',' init-declarator    {symtabEnter(currTab, $3, false);}
     ;
 
 init-declarator:
-        declarator
+        declarator  {$$ = $1;}
     /* TODO: initialized declarator skipped for assignment 3: |   declarator '=' initializer */
     ;
 
@@ -350,7 +353,7 @@ type-specifier:
     |   UNSIGNED    {$$ = $1;}
     |   _BOOL       {$$ = $1;}
     |   _COMPLEX    {$$ = $1;}
-    |   struct-or-union-specifier
+    |   struct-or-union-specifier {$$ = $1;};
     /* TODO: ignored here: |   enum-specifier */
     /* TODO: Ignored here: |   typedef-name */
     ;
@@ -507,7 +510,7 @@ direct-abstract-declarator:
     |   '(' ')'
     ;
 
-    /*TODO:  6.7.8 - skipped for assignment 3 */
+    /*6.7.8 - Initialization */
 initializer:
         assignment-expression
     |   '{' initializer-list '}'
