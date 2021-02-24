@@ -235,3 +235,113 @@ struct astnode_hdr* allocFunc(struct astnode_hdr *name, struct astnode_lst *lst)
 
     return (struct astnode_hdr *) fncn;
 }
+
+struct symtab* symtabCreate(enum symtab_scope scope){
+    struct symtab *symtab = mallocSafe(sizeof (struct symtab));
+    symtab->scope = scope;
+    symtab->parent = currTab;
+    symtab->head.generic = NULL;
+    symtab->numChildren = 0;
+
+    if(currTab != NULL){
+        currTab->numChildren++;
+        //TODO: assuming this won't fail
+        currTab->children = realloc(currTab->children, sizeof(struct symtab*) * currTab->numChildren);
+        currTab->children[currTab->numChildren - 1] = symtab;
+    }
+    currTab = symtab;
+
+    return symtab;
+}
+
+void symtabDestroy(struct symtab *symtab){
+    if(symtab->numChildren > 0){
+        fprintf(stderr, "Warning: symtab being destroyed has children which will also be destroyed");
+        for(int i = 0; i < symtab->numChildren; i++){
+            symtabDestroy(symtab->children[i]);
+        }
+        free(symtab->children);
+    }
+
+    struct symtab *nextTab = symtab->parent;
+
+    union symtab_entry currEntry = symtab->head;
+    union symtab_entry nextEntry;
+    while(currEntry.generic != NULL){
+        nextEntry = currEntry.generic->next;
+        //TODO: free elements within an entry - ex: AST Node, ...
+        free(currEntry.generic);
+        currEntry = nextEntry;
+    }
+
+    free(symtab);
+
+    currTab = nextTab;
+}
+
+union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name){
+    if(symtab == NULL)
+        return (union symtab_entry)(struct symtab_entry_generic*)NULL;
+
+    union symtab_entry currEntry = symtab->head;
+    union symtab_entry nextEntry;
+    while(currEntry.generic != NULL){
+        nextEntry = currEntry.generic->next;
+        if( currEntry.generic->ns == ns &&
+                strcmp(currEntry.generic->ident->value.string_val, name) == 0){
+            return currEntry;
+        }
+        currEntry = nextEntry;
+    }
+
+    return symtabLookup(symtab->parent, ns, name);
+}
+
+bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
+    union symtab_entry existingVal = symtabLookup(symtab, entry.generic->ns, entry.generic->ident->value.string_val);
+    if(existingVal.generic != NULL){
+        if(replace){
+            if(existingVal.generic->next.generic != NULL)
+                existingVal.generic->next.generic->prev = entry;
+
+            if(existingVal.generic->prev.generic != NULL)
+                existingVal.generic->prev.generic->next = entry;
+            return true;
+        }
+        else{
+            fprintf(stderr, "Warning: value already exists in symtab and replace not set, ignoring");
+            return false;
+        }
+    }
+
+    //Insert element onto beginning of list
+    union symtab_entry oldHead = symtab->head;
+    symtab->head = entry;
+    entry.generic->prev.generic = NULL;
+    entry.generic->next = oldHead;
+}
+
+size_t getEntrySize(enum symtab_type type){
+    switch (type) {
+        case ENTRY_GENERIC:
+            return sizeof(struct symtab_entry_generic);
+    }
+}
+
+struct symtab_entry_generic* allocEntry(enum symtab_type type){
+    struct symtab_entry_generic *ret;
+
+    ret = mallocSafe(getEntrySize(type));
+    ret->type = type;
+    clearEntry(ret);
+
+    return ret;
+}
+
+struct symtab_entry_generic* clearEntry(union symtab_entry entry){
+    enum symtab_type type = entry.generic->type;
+    size_t size = getEntrySize(type);
+    //TODO: potential memory leak due to un-freed elements in the entry
+    memset(entry, 0, size);
+    entry.generic->type = type;
+}
