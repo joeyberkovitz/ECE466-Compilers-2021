@@ -83,7 +83,7 @@ void setStr(union astnode val, char *txt, size_t len){
 void setFlag(union astnode val, int flag, char *txt, int orig_flags){
 	val.lexNode->flags = flag;
 	if(orig_flags != val.lexNode->flags)
-		fprintf(stderr, "%s:%d: Warning: Integer value %s overflowed specified type\n", val.lexNode->file, val.lexNode->line, txt);
+		fprintf(stderr, "%s:%d:Warning:Integer value %s overflowed specified type\n", val.lexNode->file, val.lexNode->line, txt);
 }
 
 void setInt(union astnode val, char *txt, int flags, int base){
@@ -122,14 +122,14 @@ void setInt(union astnode val, char *txt, int flags, int base){
 		else if(base == 10){
 			val.lexNode->value.num_val.integer_val = LLONG_MAX;
 			setFlag(val, llint_type, txt, flags);
-			fprintf(stderr, "%s:%d: Warning: Integer value %s out of range of type long long int\n", val.lexNode->file, val.lexNode->line, txt);
+			fprintf(stderr, "%s:%d:Warning:Integer value %s out of range of type long long int\n", val.lexNode->file, val.lexNode->line, txt);
 			return;
 		}
 	}
 
 	setFlag(val, ullint_type, txt, flags);
 	if(errno == ERANGE)
-		fprintf(stderr, "%s:%d: Warning: Integer value %s out of range of type unsigned long long int\n", val.lexNode->file, val.lexNode->line, txt);
+		fprintf(stderr, "%s:%d:Warning:Integer value %s out of range of type unsigned long long int\n", val.lexNode->file, val.lexNode->line, txt);
 	return;
 }
 
