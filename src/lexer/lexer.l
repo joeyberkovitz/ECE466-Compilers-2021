@@ -12,6 +12,8 @@
 
     //TODO: if setting sym here, should also set in places where RET macro isn't used
 	#define RET(x) processLine();yylval.lexNode->sym = x;return x;
+	#define RETINT(t,b) processLine();setInt(yylval, yytext, t, b);yylval.lexNode->sym = NUMBER;return NUMBER;
+	#define RETFLT(t) processLine();setFloat(yylval, yytext, t);yylval.lexNode->sym = NUMBER;return NUMBER;
 
 	extern union astnode yylval;
 	
@@ -102,46 +104,46 @@ _Imaginary			{RET(_IMAGINARY)}
 
 
 	/* Identifiers - 6.4.2 */
-{NONDIGIT}{IDCHARS}*	{processLine(); setStr(yylval, yytext, yyleng); return IDENT;}
+{NONDIGIT}{IDCHARS}*	{processLine(); setStr(yylval, yytext, yyleng); yylval.lexNode->sym = IDENT; return IDENT;}
 
 	/* Constants - 6.4.4 */
 	/* Integers - 6.4.4.1 */
-{DECIMAL}					{int base = 10; processLine(); setInt(yylval, yytext, int_type, base); return NUMBER;}
-{DECIMAL}[Uu]					{int base = 10; processLine(); setInt(yylval, yytext, uint_type, base); return NUMBER;}
-{DECIMAL}[Ll]					{int base = 10; processLine(); setInt(yylval, yytext, lint_type, base); return NUMBER;}
-{DECIMAL}{ULONG}				{int base = 10; processLine(); setInt(yylval, yytext, ulint_type, base); return NUMBER;}
-{DECIMAL}{LONGLONG}				{int base = 10; processLine(); setInt(yylval, yytext, llint_type, base); return NUMBER;}
-{DECIMAL}{ULONGLONG}				{int base = 10; processLine(); setInt(yylval, yytext, ullint_type, base); return NUMBER;}
+{DECIMAL}					{RETINT(10,int_type)}
+{DECIMAL}[Uu]					{RETINT(10,uint_type)}
+{DECIMAL}[Ll]					{RETINT(10,lint_type)}
+{DECIMAL}{ULONG}				{RETINT(10,ulint_type)}
+{DECIMAL}{LONGLONG}				{RETINT(10,llint_type)}
+{DECIMAL}{ULONGLONG}				{RETINT(10,ullint_type)}
 
-{OCTAL}						{int base = 8; processLine(); setInt(yylval, yytext, int_type, base); return NUMBER;}
-{OCTAL}[Uu]					{int base = 8; processLine(); setInt(yylval, yytext, uint_type, base); return NUMBER;}
-{OCTAL}[Ll]					{int base = 8; processLine(); setInt(yylval, yytext, lint_type, base); return NUMBER;}
-{OCTAL}{ULONG}					{int base = 8; processLine(); setInt(yylval, yytext, ulint_type, base); return NUMBER;}
-{OCTAL}{LONGLONG}				{int base = 8; processLine(); setInt(yylval, yytext, llint_type, base); return NUMBER;}
-{OCTAL}{ULONGLONG}				{int base = 8; processLine(); setInt(yylval, yytext, ullint_type, base); return NUMBER;}
+{OCTAL}						{RETINT(8,int_type)}
+{OCTAL}[Uu]					{RETINT(8,uint_type)}
+{OCTAL}[Ll]					{RETINT(8,lint_type)}
+{OCTAL}{ULONG}					{RETINT(8,ulint_type)}
+{OCTAL}{LONGLONG}				{RETINT(8,llint_type)}
+{OCTAL}{ULONGLONG}				{RETINT(8,ullint_type)}
 
-{HEX}						{int base = 16; processLine(); setInt(yylval, yytext, int_type, base);; return NUMBER;}
-{HEX}[Uu]					{int base = 16; processLine(); setInt(yylval, yytext, uint_type, base); return NUMBER;}
-{HEX}[Ll]					{int base = 16; processLine(); setInt(yylval, yytext, lint_type, base); return NUMBER;}
-{HEX}{ULONG}					{int base = 16; processLine(); setInt(yylval, yytext, ulint_type, base); return NUMBER;}
-{HEX}{LONGLONG}					{int base = 16; processLine(); setInt(yylval, yytext, llint_type, base); return NUMBER;}
-{HEX}{ULONGLONG}				{int base = 16; processLine(); setInt(yylval, yytext, ullint_type, base); return NUMBER;}
+{HEX}						{RETINT(16,int_type)}
+{HEX}[Uu]					{RETINT(16,uint_type)}
+{HEX}[Ll]					{RETINT(16,lint_type)}
+{HEX}{ULONG}					{RETINT(16,ulint_type)}
+{HEX}{LONGLONG}					{RETINT(16,llint_type)}
+{HEX}{ULONGLONG}				{RETINT(16,ullint_type)}
 
 	/* Floats - 6.4.4.2 */
 {FLTDEC}				|
 {FLTDECEXP}				|
 {FLTHEX}				|
-{FLTHEXEXP}				{processLine(); setFloat(yylval, yytext, double_type); return NUMBER;}
+{FLTHEXEXP}				{RETFLT(double_type)}
 
 {FLTDEC}[Ff]				|
 {FLTDECEXP}[Ff]				|
 {FLTHEX}[Ff]				|
-{FLTHEXEXP}[Ff]				{processLine(); setFloat(yylval, yytext, float_type); return NUMBER;}
+{FLTHEXEXP}[Ff]				{RETFLT(float_type)}
 
 {FLTDEC}[Ll]				|
 {FLTDECEXP}[Ll]				|
 {FLTHEX}[Ll]				|
-{FLTHEXEXP}[Ll]				{processLine(); setFloat(yylval, yytext, ldouble_type); return NUMBER;}
+{FLTHEXEXP}[Ll]				{RETFLT(ldouble_type)}
 
 
 	/* Character Constants - 6.4.4.4, String literals - 6.4.5 */
@@ -159,8 +161,8 @@ _Imaginary			{RET(_IMAGINARY)}
 <CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>{INVALIDESC}			{fprintf(stderr, "%s:%d: Warning: Invalid escape character: '%s'\n", currFile, currLine, yytext);}
 <CHAR_CONST,WCHAR_CONST>[\n<<EOF>>]					{BEGIN(INITIAL); resetString(); fprintf(stderr, "%s:%d: Error: missing terminating ' character\n", currFile, currLine);}
 <STR_LIT,WSTR_LIT>[\n<<EOF>>]                           		{BEGIN(INITIAL); resetString(); fprintf(stderr, "%s:%d: Error: missing terminating \" character\n", currFile, currLine);}
-<CHAR_CONST,WCHAR_CONST>\'						{BEGIN(INITIAL); if(currStrLen > 1) {processLine(); endChar(yylval); return CHARLIT;} resetString(); fprintf(stderr, "%s:%d: Error: invalid empty character literal\n", currFile, currLine);}
-<STR_LIT,WSTR_LIT>\"							{BEGIN(INITIAL); processLine(); endString(yylval); return STRING;}
+<CHAR_CONST,WCHAR_CONST>\'						{BEGIN(INITIAL); if(currStrLen > 1) {processLine(); endChar(yylval); yylval.lexNode->sym = CHARLIT; return CHARLIT;} resetString(); fprintf(stderr, "%s:%d: Error: invalid empty character literal\n", currFile, currLine);}
+<STR_LIT,WSTR_LIT>\"							{BEGIN(INITIAL); processLine(); endString(yylval); yylval.lexNode->sym = STRING; return STRING;}
 
 
 	/* Punctuators - 6.4.6 */
