@@ -82,21 +82,20 @@ void setStr(union astnode val, char *txt, size_t len){
 }
 
 void setFlag(union astnode val, int flag, char *txt, int orig_flags){
-	val.lexNode->flags = flag;
-	if(orig_flags != val.lexNode->flags)
+	val.lexNode->type_flags = flag;
+	if(orig_flags != val.lexNode->type_flags)
 		fprintf(stderr, "%s:%d:Warning:Integer value %s overflowed specified type\n", val.lexNode->file, val.lexNode->line, txt);
 }
 
 void setInt(union astnode val, char *txt, int flags, int base){
 	errno = 0;
 	unsigned long long int num = strtoull(txt, NULL, base);
-	val.lexNode->sym = NUMBER;
 	val.lexNode->value.num_val.integer_val = num;
 
 	//Check table in 6.4.4.1 for order of type progression	
 	if(errno != ERANGE){
 		if(hasFlag(flags, int_type) && num <= INT_MAX){
-			val.lexNode->flags = int_type;
+			val.lexNode->type_flags = int_type;
 			return;
 		}
 
@@ -136,18 +135,17 @@ void setInt(union astnode val, char *txt, int flags, int base){
 }
 
 void setFloat(union astnode val, char *txt, int flags){
-    val.lexNode->sym = NUMBER;
 	if(hasFlag(flags, float_type)){
 		val.lexNode->value.num_val.float_val = strtof(txt, NULL);
-		val.lexNode->flags = float_type;
+		val.lexNode->type_flags = float_type;
 	}
 	else if(hasFlag(flags, double_type)){
 		val.lexNode->value.num_val.double_val = strtod(txt, NULL);
-		val.lexNode->flags = double_type;
+		val.lexNode->type_flags = double_type;
 	}
 	else{
 		val.lexNode->value.num_val.ldouble_val = strtold(txt, NULL);
-		val.lexNode->flags = ldouble_type;
+		val.lexNode->type_flags = ldouble_type;
 	}
 }
 

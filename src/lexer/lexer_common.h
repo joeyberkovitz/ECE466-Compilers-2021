@@ -19,7 +19,15 @@ enum node_type {
     NODE_BINOP,
     NODE_TEROP,
     NODE_LST,
-    NODE_FNCN
+    NODE_FNCN,
+
+    NODE_VAR,
+    NODE_FNCNDEC,
+    NODE_STAG,
+    NODE_UTAG,
+    NODE_SMEM,
+    NODE_UMEM
+    // TODO: labels
 };
 
 typedef union {
@@ -29,19 +37,34 @@ typedef union {
 	long double ldouble_val;
 } NUMTYPE;
 
+enum type_flags {
+    void_type = 0x001,
+    signed_type = 0x002,
+    unsigned_type = 0x004,
+    char_type = 0x008,
+    uchar_type = 0x008 | 0x004,
+    sint_type = 0x010,
+    usint_type = 0x010 | 0x004,
+    int_type = 0x020,
+    uint_type = 0x020 | 0x004,
+    lint_type = 0x040,
+    ulint_type = 0x040 | 0x004,
+    llint_type = 0x080,
+    ullint_type = 0x080 | 0x004,
+    float_type = 0x100,
+    double_type = 0x200,
+    ldouble_type = 0x200 | 0x040,
+    bool_type = 0x400,
+    complex_type = 0x800,
+    fcomplex_type = 0x800 | 0x100,
+    dcomplex_type = 0x800 | 0x200,
+    ldcomplex_type = 0x800 | 0x200 | 0x040
+};
+
 enum token_flags {
-	int_type = 0x01,
-	uint_type = 0x02,
-	lint_type = 0x04,
-	ulint_type = 0x04 | 0x02,
-	llint_type = 0x08,
-	ullint_type = 0x08 | 0x02,
-	float_type = 0x10,
-	double_type = 0x20,
-	ldouble_type = 0x40,
-	flag_escaped = 0x80, //For processing escaped characters appropriately
-	flag_octal = 0x100,
-	flag_hex = 0x200
+    flag_escaped = 0x01,
+    flag_octal = 0x02, //For processing escaped characters appropriately
+    flag_hex = 0x04
 };
 
 //TODO: change this to something more useful
@@ -57,6 +80,7 @@ struct LexVal {
 	int line;
 	int len;
 	enum token_flags flags;
+    enum type_flags tflags;
 	LexVals value;
 };
 
@@ -102,6 +126,11 @@ union astnode {
     struct astnode_terop *terNode;
     struct astnode_lst *lst;
     struct astnode_fncn *fncn;
+
+    struct astnode_varmem *varMem;
+    struct astnode_fncndec *fncndec;
+    struct astnode_tag *tag;
+    // TODO: labels
 };
 
 union astnode yylval;
