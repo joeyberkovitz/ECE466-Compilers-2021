@@ -347,6 +347,7 @@ struct symtab_entry_generic* allocEntry(enum symtab_type type, bool clear){
 
     ret = mallocSafe(getEntrySize(type));
     ret->st_type = type;
+    ret->type = NODE_SYMTAB;
     if(clear)
         clearEntry((union symtab_entry)ret);
 
@@ -430,6 +431,7 @@ void addTypeSpecQual(union symtab_entry entry, struct LexVal *val, enum entry_sp
     struct astnode_typespec *spec_node = (struct astnode_typespec*)entry.generic->type_spec;
     if(spec_node == NULL){
         spec_node = mallocSafe(sizeof(struct astnode_typespec));
+        entry.generic->type_spec = (struct astnode_hdr *) spec_node;
         spec_node->type = NODE_TYPESPEC;
         spec_node->parent = (struct astnode_hdr *) entry.generic;
         spec_node->stype = spec_node->qtype = 0;
@@ -561,6 +563,7 @@ void finalizeSpecs(union symtab_entry entry){
         fprintf(stderr, "complex must have a further real specifier");
         exit(-1);
     }
+    fprintf(stderr,"Done finalizing specs");
 }
 
 void printDecl(union symtab_entry entry){

@@ -30,6 +30,7 @@ enum node_type {
     NODE_UMEM,
     // TODO: labels
 
+    NODE_SYMTAB, //if present - need to check st_type for more details
     NODE_TYPESPEC,
     NODE_ARY
 };
