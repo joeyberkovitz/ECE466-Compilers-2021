@@ -24,7 +24,14 @@ void addToList(struct astnode_lst *lst, struct astnode_hdr *el);
 struct astnode_hdr* allocFunc(struct astnode_hdr *name, struct astnode_lst *lst);
 
 enum symtab_type {
-    ENTRY_GENERIC
+    ENTRY_GENERIC,
+    ENTRY_VAR,
+    ENTRY_FNCN,
+    ENTRY_STAG,
+    ENTRY_UTAG,
+    ENTRY_SMEM,
+    ENTRY_UMEM
+    // TODO: labels
 };
 
 enum symtab_ns {
@@ -41,8 +48,14 @@ enum symtab_scope {
     SCOPE_PROTO
 };
 
+struct symtab;
+
 union symtab_entry {
     struct symtab_entry_generic *generic;
+    struct astnode_varmem *varmem;
+    struct astnode_fncndec *fncn;
+    struct astnode_tag *tag;
+    // TODO: labels
 };
 
 enum entry_spec_type {
@@ -51,18 +64,95 @@ enum entry_spec_type {
     SPEC_TYPE_QUAL
 };
 
+enum storage_class {
+    STG_TYPEDEF,
+    STG_EXTERN,
+    STG_STATIC,
+    STG_AUTO,
+    STG_REGISTER
+};
+
+enum qual_flag {
+    QUAL_CONST = 0x1,
+    QUAL_RESTRICT = 0x2,
+    QUAL_VOLATILE = 0x4
+};
+
 struct symtab_entry_generic {
-    enum symtab_type type;
+    enum node_type type;
+    enum symtab_type st_type;
     union symtab_entry prev;
     union symtab_entry next;
     enum symtab_ns ns;
     struct LexVal *ident;
 
     //Specifiers
-    struct LexVal *storage;
-    struct astnode_hdr **typeSpec;
+    enum storage_class stgclass;
+    struct LexVal *storageNode;
+    struct astnode_hdr *type_spec;
+    /*struct astnode_hdr **typeSpec;
     size_t numTypeSpec;
-    struct LexVal *typeQual;
+    struct LexVal *typeQual;*/
+};
+
+struct astnode_varmem {
+    enum node_type type;
+    enum symtab_type st_type;
+    union symtab_entry prev;
+    union symtab_entry next;
+    enum symtab_ns ns;
+    struct LexVal *ident;
+    enum storage_class stgclass;
+    struct LexVal *storageNode;
+    struct astnode_hdr *type_spec;
+};
+
+struct astnode_fncndec {
+    enum node_type type;
+    enum symtab_type st_type;
+    union symtab_entry prev;
+    union symtab_entry next;
+    enum symtab_ns ns;
+    struct LexVal *ident;
+    enum storage_class stgclass;
+    struct LexVal *storageNode;
+    struct astnode_hdr *type_spec;
+
+    bool unknown;
+    struct symtab *scope;
+};
+
+struct astnode_tag {
+    enum node_type type;
+    enum symtab_type st_type;
+    union symtab_entry prev;
+    union symtab_entry next;
+    enum symtab_ns ns;
+    struct LexVal *ident;
+    enum storage_class stgclass;
+    struct LexVal *storageNode;
+    struct astnode_hdr *type_spec;
+
+    bool complete;
+    struct symtab *container;
+};
+
+/* TODO: labels at label-statements */
+
+struct astnode_typespec {
+    enum node_type type;
+    struct astnode_hdr *parent;
+    enum type_flag stype;
+    enum qual_flag qtype;
+
+    struct astnode_lst *type_specs;
+    struct astnode_lst *type_quals;
+};
+
+struct astnode_ary {
+    enum node_type type;
+    struct astnode_hdr *parent, *stype;
+    int length;
 };
 
 struct symtab {
@@ -77,12 +167,20 @@ struct symtab* symtabCreate(enum symtab_scope scope);
 void symtabDestroy(struct symtab *symtab);
 union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name);
 bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace);
-struct symtab_entry_generic* allocEntry(enum symtab_type type);
+struct symtab_entry_generic* allocEntry(enum symtab_type type, bool clear);
 struct symtab_entry_generic* clearEntry(union symtab_entry entry);
+struct symtab_entry_generic* copyEntry(union symtab_entry entry);
 size_t getEntrySize(enum symtab_type type);
-void setEntrySpec(union symtab_entry entry, struct astnode_hdr *val, enum entry_spec_type type);
 
+void setStgSpec(union symtab_entry entry, struct symtab *symtab, struct LexVal *val);
+void handleStgDefaults(union symtab_entry entry, struct symtab *symtab);
+void addTypeSpecQualNode(struct astnode_typespec* spec_node, struct LexVal *val, enum type_flag flag, enum entry_spec_type type);
+void addTypeSpecQual(union symtab_entry entry, struct LexVal *val, enum entry_spec_type type);
 
+void finalizeSpecs(union symtab_entry entry);
+
+void printDecl(union symtab_entry entry);
+//void allocAry(union symtab_entry entry, struct LexVal *val);
 
 
 struct symtab *currTab;

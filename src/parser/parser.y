@@ -4,7 +4,7 @@
 	#include "parser_common.h"
 	#include "lexer/lexer_common.h"
 %}
-
+%define parse.trace
 %define api.value.type {union astnode}
 %token <lexNode> IDENT
 %token <lexNode> NUMBER
@@ -54,11 +54,14 @@
 %token <lexNode> RESTRICT
 %token <lexNode> VOLATILE
 %token <lexNode> ELLIPSIS
+
+    /* Expressions */
 %type  <hdr> expression
 %type  <hdr> primary-expression
 %type  <hdr> postfix-expression
 %type  <lst> argument-expression-list
 %type  <hdr> unary-expression
+%type  <lexNode> '=' '&' '*' '+' '-' '~'
 %type  <lexNode> unary-operator
 %type  <hdr> cast-expression
 %type  <hdr> multiplicative-expression
@@ -73,6 +76,7 @@
 %type  <hdr> logical-OR-expression
 %type  <hdr> conditional-expression
 %type  <hdr> assignment-expression
+%type  <lexNode> assignment-operator
 
     /* Declarations */
 %type  <hdr> declaration
@@ -108,35 +112,62 @@
 %type  <hdr> designator-list
 %type  <hdr> designator
 
-%type  <lexNode> assignment-operator
-%type  <lexNode> '=' '&' '*' '+' '-' '~'
 
 %initial-action {
     //Space to perform initialization actions at beginning of yyparse()
     //Init file scope symbol table here
     currTab = symtabCreate(SCOPE_FILE);
-    currDecl.generic = allocEntry(ENTRY_GENERIC);
+    currDecl.generic = allocEntry(ENTRY_GENERIC, true);
 };
 
 
 %% /* Grammar */
 
-    /* Program consists of series of expression statements */
-program:
-    program-line
-    | program program-line
+    /* 6.9 - External definitions */
+translation-unit:
+        external-declaration
+    |   translation-unit external-declaration
     ;
 
-program-line:
-        expression-statement
-    |   declaration
+external-declaration:
+       /* function-definition
+    |*/   declaration
+    |     statement
     ;
 
+    /* 6.9.1 - Function definitions */
+    /* TODO: KR style definitions excluded from assg 3 */
+/*function-definition:
+        declaration-specifiers declarator compound-statement
+    ;*/
 
-    /* 6.8.3 - Expressions and null statements */
+    /* 6.8 - Statements and blocks */
+statement:
+        compound-statement
+    |   expression-statement
+    ;
+
+    /* 6.8.2 - Compound statements */
+    /* TODO: deal with scopes */
+compound-statement:
+        '{' block-item-list '}'
+    |   '{' '}'
+    ;
+
+block-item-list:
+        block-item
+    |   block-item-list block-item
+    ;
+
+block-item:
+        declaration
+    |   statement
+    ;
+
+    /* 6.8.3 - Expression and null statements */
 expression-statement:
-    ';'
-    | expression ';'            {printAst($1, 0);}
+        ';'
+    |   expression ';'            {printAst($1, 0);}
     ;
 
     /* TODO: 6.6 - Constant expressions; once we do declarations */
@@ -159,17 +190,17 @@ assignment-expression:
     ;
 
 assignment-operator:
-        '='        {$1->sym = '='; $$ = $1;}
-    |   TIMESEQ    {$1->sym = TIMESEQ; $$ = $1;}
-    |   DIVEQ      {$1->sym = DIVEQ; $$ = $1;}
-    |   MODEQ      {$1->sym = MODEQ; $$ = $1;}
-    |   PLUSEQ     {$1->sym = PLUSEQ; $$ = $1;}
-    |   MINUSEQ    {$1->sym = MINUSEQ; $$ = $1;}
-    |   SHLEQ      {$1->sym = SHLEQ; $$ = $1;}
-    |   SHREQ      {$1->sym = SHREQ; $$ = $1;}
-    |   ANDEQ      {$1->sym = ANDEQ; $$ = $1;}
-    |   XOREQ      {$1->sym = XOREQ; $$ = $1;}
-    |   OREQ       {$1->sym = OREQ; $$ = $1;}
+        '='        {$$ = $1;}
+    |   TIMESEQ    {$$ = $1;}
+    |   DIVEQ      {$$ = $1;}
+    |   MODEQ      {$$ = $1;}
+    |   PLUSEQ     {$$ = $1;}
+    |   MINUSEQ    {$$ = $1;}
+    |   SHLEQ      {$$ = $1;}
+    |   SHREQ      {$$ = $1;}
+    |   ANDEQ      {$$ = $1;}
+    |   XOREQ      {$$ = $1;}
+    |   OREQ       {$$ = $1;}
     ;
 
     /* 6.5.15 - Conditional expressions */
@@ -263,11 +294,11 @@ unary-expression:
     ;
 
 unary-operator:
-        '&'    {$1->sym = '&'; $$ = $1;}
-    |   '*'    {$1->sym = '*'; $$ = $1;}
-    |   '+'    {$1->sym = '+'; $$ = $1;}
-    |   '-'    {$1->sym = '-'; $$ = $1;}
-    |   '~'    {$1->sym = '~'; $$ = $1;}
+        '&'    {$$ = $1;}
+    |   '*'    {$$ = $1;}
+    |   '+'    {$$ = $1;}
+    |   '-'    {$$ = $1;}
+    |   '~'    {$$ = $1;}
     ;
 
     /* 6.5.2 - Postfix expressions */
@@ -293,16 +324,16 @@ argument-expression-list:
 
     /* 6.5.1 - Primary expressions */
 primary-expression:
-        IDENT                   {$1->sym = IDENT; $$ = (struct astnode_hdr*)$1;}
-    |   NUMBER                  {$1->sym = NUMBER; $$ = (struct astnode_hdr*)$1;}
-    |   CHARLIT                 {$1->sym = CHARLIT; $$ = (struct astnode_hdr*)$1;}
-    |   STRING                  {$1->sym = STRING; $$ = (struct astnode_hdr*)$1;}
+        IDENT                   {$$ = (struct astnode_hdr*)$1;}
+    |   NUMBER                  {$$ = (struct astnode_hdr*)$1;}
+    |   CHARLIT                 {$$ = (struct astnode_hdr*)$1;}
+    |   STRING                  {$$ = (struct astnode_hdr*)$1;}
     |   '(' expression ')'      {$$ = $2;} /* throw away parentheses */
     ;
 
     /* 6.7 - Declarations */
 declaration:
-        declaration-specifiers init-declarator-list ';'     {clearEntry(currDecl);}
+        declaration-specifiers {finalizeSpecs(currDecl);}  init-declarator-list ';'     {clearEntry(currDecl);}
     |   declaration-specifiers ';'                          {clearEntry(currDecl);}
     ;
 
@@ -315,19 +346,19 @@ declaration-specifiers:
 declaration-specifier:
     /* TODO: ensure at most one of each */
     /* TODO: adjustment made from spec - converted to list - check this is valid */
-        storage-class-specifier     {setEntrySpec(currDecl, $1, SPEC_STORAGE);}
-    |   type-specifier              {setEntrySpec(currDecl, $1, SPEC_TYPE_SPEC);}
-    |   type-qualifier              {setEntrySpec(currDecl, $1, SPEC_TYPE_QUAL);}
+        storage-class-specifier     {setStgSpec(currDecl, currTab, $1);}
+    |   type-specifier              {addTypeSpecQual(currDecl, $1, SPEC_TYPE_SPEC);}
+    |   type-qualifier              {addTypeSpecQual(currDecl, $1, SPEC_TYPE_QUAL);}
     /* TODO: ignored for assign 3: |   function-specifier */
     ;
 
 init-declarator-list:
-        init-declarator                             {symtabEnter(currTab, $1, false);}
-    |   init-declarator-list ',' init-declarator    {symtabEnter(currTab, $3, false);}
+        init-declarator                             {(struct astnode_hdr*)symtabEnter(currTab, currDecl, false);}
+    |   init-declarator-list ',' init-declarator    {(struct astnode_hdr*)symtabEnter(currTab, currDecl, false);}
     ;
 
 init-declarator:
-        declarator  {$$ = $1;}
+        declarator
     /* TODO: initialized declarator skipped for assignment 3: |   declarator '=' initializer */
     ;
 
@@ -353,7 +384,7 @@ type-specifier:
     |   UNSIGNED    {$$ = $1;}
     |   _BOOL       {$$ = $1;}
     |   _COMPLEX    {$$ = $1;}
-    |   struct-or-union-specifier {$$ = $1;};
+    |   struct-or-union-specifier
     /* TODO: ignored here: |   enum-specifier */
     /* TODO: Ignored here: |   typedef-name */
     ;
@@ -386,7 +417,7 @@ specifier-qualifier-list:
     ;
 
 specifier-qualifier:
-        type-specifier
+        type-specifier    {printf("s");}
     |   type-qualifier
     ;
 
@@ -422,9 +453,9 @@ enumerator:
 
     /* 6.7.3 - Type Qualifiers */
 type-qualifier:
-        CONST
-    |   RESTRICT
-    |   VOLATILE
+        CONST       {$$ = $1;}
+    |   RESTRICT    {$$ = $1;}
+    |   VOLATILE    {$$ = $1;}
     ;
 
 
@@ -441,8 +472,8 @@ declarator:
     ;
 
 direct-declarator:
-        IDENT
-    |   '(' declarator ')'
+        IDENT    {currDecl.generic->ident = $1;}
+    |   '(' declarator ')'    /* throw away parentheses */
     /* Not per spec, adjusted per assignment 3 */
     |   direct-declarator '[' NUMBER ']'
     |   direct-declarator '[' ']'

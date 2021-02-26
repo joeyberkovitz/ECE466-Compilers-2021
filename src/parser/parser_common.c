@@ -219,7 +219,6 @@ struct astnode_lst* allocList(struct astnode_hdr *el){
     return lst;
 }
 
-
 void addToList(struct astnode_lst *lst, struct astnode_hdr *el){
     lst->numVals++;
     lst->els = realloc(lst->els, sizeof(struct astnode_hdr*)*lst->numVals);
@@ -298,6 +297,10 @@ union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *
 }
 
 bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
+    entry = (union symtab_entry)copyEntry(entry);
+    if(entry.generic->stgclass == 0 && symtab->scope != SCOPE_PROTO)
+        handleStgDefaults(entry, symtab);
+
     union symtab_entry existingVal = symtabLookup(symtab, entry.generic->ns, entry.generic->ident->value.string_val);
     if(existingVal.generic != NULL){
         if(replace){
@@ -319,29 +322,306 @@ bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
     symtab->head = entry;
     entry.generic->prev.generic = NULL;
     entry.generic->next = oldHead;
+
+    printDecl(entry);
 }
 
 size_t getEntrySize(enum symtab_type type){
     switch (type) {
         case ENTRY_GENERIC:
             return sizeof(struct symtab_entry_generic);
+        case ENTRY_VAR:
+        case ENTRY_SMEM:
+        case ENTRY_UMEM:
+            return sizeof(struct astnode_varmem);
+        case ENTRY_FNCN:
+            return sizeof(struct astnode_fncndec);
+        case ENTRY_STAG:
+        case ENTRY_UTAG:
+            return sizeof(struct astnode_tag);
     }
 }
 
-struct symtab_entry_generic* allocEntry(enum symtab_type type){
+struct symtab_entry_generic* allocEntry(enum symtab_type type, bool clear){
     struct symtab_entry_generic *ret;
 
     ret = mallocSafe(getEntrySize(type));
-    ret->type = type;
-    clearEntry(ret);
+    ret->st_type = type;
+    if(clear)
+        clearEntry((union symtab_entry)ret);
 
     return ret;
 }
 
 struct symtab_entry_generic* clearEntry(union symtab_entry entry){
-    enum symtab_type type = entry.generic->type;
+    enum symtab_type type = entry.generic->st_type;
     size_t size = getEntrySize(type);
     //TODO: potential memory leak due to un-freed elements in the entry
-    memset(entry, 0, size);
-    entry.generic->type = type;
+    memset(entry.generic, 0, size);
+    entry.generic->st_type = type;
+}
+
+struct symtab_entry_generic* copyEntry(union symtab_entry entry){
+    struct symtab_entry_generic *ret = allocEntry(entry.generic->st_type, false);
+    size_t size = getEntrySize(ENTRY_GENERIC);
+    memcpy(ret, entry.generic, size);
+    
+    if(entry.generic->st_type == ENTRY_GENERIC){
+        ret->st_type = ENTRY_VAR;
+        ret->ns = OTHER;
+    }
+
+    return ret;
+}
+
+void setStgSpec(union symtab_entry entry, struct symtab *symtab, struct LexVal *val){
+    if(entry.generic->stgclass == 0){
+        if(symtab->scope == SCOPE_FILE && (val->sym == AUTO || val->sym == REGISTER)){
+            fprintf(stderr, "no auto or register in file scope");
+            exit(-1);
+        }
+
+        if(symtab->scope == SCOPE_PROTO && val->sym != REGISTER){
+            fprintf(stderr, "only register in parameters");
+            exit(-1);
+        }
+
+        switch(val->sym){
+            case TYPEDEF:
+                entry.generic->stgclass = STG_TYPEDEF; break;
+            case EXTERN:
+                entry.generic->stgclass = STG_EXTERN; break;
+            case STATIC:
+                entry.generic->stgclass = STG_STATIC; break;
+            case AUTO:
+                entry.generic->stgclass = STG_AUTO; break;
+            case REGISTER:
+                entry.generic->stgclass = STG_REGISTER; break;
+        }
+
+        entry.generic->storageNode = val;
+    }
+    else{
+        // TODO: proper error recovery
+        fprintf(stderr, "cannot have multiple storage classes");
+        exit(-1);
+    }
+}
+
+void handleStgDefaults(union symtab_entry entry, struct symtab *symtab){
+    if((symtab->scope == SCOPE_FUNC || symtab->scope == SCOPE_BLOCK) && entry.generic->st_type != ENTRY_FNCN)
+        entry.generic->stgclass = STG_AUTO;
+    else
+        entry.generic->stgclass = STG_EXTERN;
+}        
+
+void addTypeSpecQualNode(struct astnode_typespec* spec_node, struct LexVal *val, enum type_flag flag, enum entry_spec_type type){
+    if(type == SPEC_TYPE_SPEC){
+       spec_node->stype |= flag;
+       addToList(spec_node->type_specs, (struct astnode_hdr*)val);
+    }
+    else{
+       spec_node->qtype |= flag;
+       addToList(spec_node->type_quals, (struct astnode_hdr*)val);
+    }
+}
+
+void addTypeSpecQual(union symtab_entry entry, struct LexVal *val, enum entry_spec_type type){
+    struct astnode_typespec *spec_node = (struct astnode_typespec*)entry.generic->type_spec;
+    if(spec_node == NULL){
+        spec_node = mallocSafe(sizeof(struct astnode_typespec));
+        spec_node->type = NODE_TYPESPEC;
+        spec_node->parent = (struct astnode_hdr *) entry.generic;
+        spec_node->stype = spec_node->qtype = 0;
+        spec_node->type_specs = allocList((struct astnode_hdr*)NULL);
+        spec_node->type_quals = allocList((struct astnode_hdr*)NULL);
+    }
+
+    if(type == SPEC_TYPE_SPEC){
+        int flag = spec_node->stype;
+        switch(val->sym){
+            case VOID:
+                if(flag != 0){
+                    fprintf(stderr, "invalid type specifier");
+                    exit(-1);
+                }
+                addTypeSpecQualNode(spec_node, val, void_type, type);
+                break;
+            case CHAR:
+                if(flag == 0 || flag == signed_type || flag == unsigned_type)
+                    addTypeSpecQualNode(spec_node, val, char_type, type);
+                else{
+                    fprintf(stderr, "invalid type specifier");
+                    exit(-1);
+                }
+                break;
+            case SHORT:
+                if(flag == 0 || flag == signed_type || flag == unsigned_type || flag == int_type || flag == int_type & signed_type || flag == uint_type)
+                    addTypeSpecQualNode(spec_node, val, sint_type, type);
+                else{
+                    fprintf(stderr, "invalid type specifier");
+                    exit(-1);
+                }
+                break;
+            case INT:
+                if(flag == 0 || flag == signed_type || flag == unsigned_type || flag == sint_type || flag == sint_type & signed_type || flag == usint_type || flag == lint_type || flag == lint_type & signed_type || flag == ulint_type || flag == llint_type || flag == llint_type & signed_type || flag == ullint_type)
+                    addTypeSpecQualNode(spec_node, val, int_type, type);
+                else{
+                    fprintf(stderr, "invalid type specifier");
+                    exit(-1);
+                }
+                break;
+            case LONG:
+                if(flag == 0 || flag == signed_type || flag == unsigned_type || flag == int_type || flag == int_type & signed_type || flag == uint_type || flag == double_type || flag == complex_type || flag == dcomplex_type)
+                    addTypeSpecQualNode(spec_node, val, lint_type, type);
+                else if(flag == lint_type || flag == lint_type & signed_type || flag == ulint_type || flag == int_type & lint_type || flag == int_type & lint_type & signed_type || flag == int_type & ulint_type){
+                    spec_node->stype &= ~lint_type;
+                    addTypeSpecQualNode(spec_node, val, llint_type, type);
+                } 
+                else{
+                    fprintf(stderr, "invalid type specifier");
+                    exit(-1);
+                }
+                break;
+            case FLOAT:
+                if(flag == 0 || flag == complex_type)
+                    addTypeSpecQualNode(spec_node, val, float_type, type);
+                else{
+                    fprintf(stderr, "invalid type specifier");
+                    exit(-1);
+                }
+                break;
+            case DOUBLE:
+                if(flag == 0 || flag == lint_type || flag == complex_type || flag == complex_type & lint_type)
+                    addTypeSpecQualNode(spec_node, val, double_type, type);
+                else{
+                    fprintf(stderr, "invalid type specifier");
+                    exit(-1);
+                }
+                break;
+            case SIGNED:
+                if(flag == 0 || flag == char_type || flag == sint_type || flag == int_type || flag == lint_type || flag == llint_type || flag == sint_type & int_type || flag == lint_type & int_type || flag == llint_type & int_type)
+                    addTypeSpecQualNode(spec_node, val, signed_type, type);
+                else{
+                    fprintf(stderr, "invalid type specifier");
+                    exit(-1);
+                }
+                break;
+            case UNSIGNED:
+                if(flag == 0 || flag == char_type || flag == sint_type || flag == int_type || flag == lint_type || flag == llint_type || flag == sint_type & int_type || flag == lint_type & int_type || flag == llint_type & int_type)
+                    addTypeSpecQualNode(spec_node, val, unsigned_type, type);
+                else{
+                    fprintf(stderr, "invalid type specifier");
+                    exit(-1);
+                }
+                break;
+            case _BOOL:
+                if(flag != 0){
+                    fprintf(stderr, "invalid type specifier");
+                    exit(-1);
+                }
+                addTypeSpecQualNode(spec_node, val, bool_type, type);
+                break;
+            case _COMPLEX:
+                if(flag == 0 || flag == float_type || hasFlag(flag,double_type) || flag == lint_type)
+                    addTypeSpecQualNode(spec_node, val, complex_type, type);
+                else{
+                    fprintf(stderr, "invalid type specifier");
+                    exit(-1);
+                }
+        }
+    }
+    else{
+        switch(val->sym){
+            case CONST:
+                if(!hasFlag(spec_node->qtype,QUAL_CONST))
+                    addTypeSpecQualNode(spec_node, val, QUAL_CONST, type);
+                break;
+            case RESTRICT:
+                // pointer qualifiers will be handled in a different function (or will be refactored)
+                fprintf(stderr, "restrict can only qualify pointers");
+                exit(-1);
+            case VOLATILE:
+                if(!hasFlag(spec_node->qtype,QUAL_VOLATILE))
+                    addTypeSpecQualNode(spec_node, val, QUAL_VOLATILE, type);
+                break;
+        }
+    }
+}
+
+void finalizeSpecs(union symtab_entry entry){
+    struct astnode_typespec *spec_node = (struct astnode_typespec*)entry.generic->type_spec;
+
+    // TODO: Warning?
+    if(spec_node->stype == 0 || spec_node->stype == signed_type || spec_node->stype == unsigned_type)
+        spec_node->stype |= int_type;
+
+    // TODO: _Complex alone not in spec but worked on my computer?
+    if(spec_node->stype == complex_type){
+        fprintf(stderr, "complex must have a further real specifier");
+        exit(-1);
+    }
+}
+
+void printDecl(union symtab_entry entry){
+    char *storage;
+    switch(entry.generic->stgclass){
+        case STG_TYPEDEF:
+            storage = "typedef"; break;
+        case STG_EXTERN:
+            storage = "extern"; break;
+        case STG_STATIC:
+            storage = "static"; break;
+        case STG_AUTO:
+            storage = "auto"; break;
+        case STG_REGISTER:
+            storage = "register"; break;
+    }
+
+    printf("%s is defined at %s:%d [scope info] as a \nvariable with stgclass %s  of type:\n  ", entry.generic->ident->value.string_val, entry.generic->ident->file, entry.generic->ident->line, storage);
+
+    /* TODO: iterate over pointers, arrays, functions */
+    struct astnode_typespec *spec_node = (struct astnode_typespec*)entry.generic->type_spec;
+    enum qual_flag qflags = spec_node->qtype;
+    if(hasFlag(qflags,QUAL_CONST))
+        printf("const ");
+    if(hasFlag(qflags,QUAL_RESTRICT))
+        printf("restrict ");
+    if(hasFlag(qflags,QUAL_VOLATILE))
+        printf("volatile ");
+
+    enum type_flag sflags = spec_node->stype;
+    if(hasFlag(sflags,signed_type))
+        printf("signed ");
+    if(hasFlag(sflags,unsigned_type))
+        printf("unsigned ");
+
+    if(hasFlag(sflags,char_type))
+        printf("char");
+    if(hasFlag(sflags,sint_type))
+        printf("short");
+    if(hasFlag(sflags,lint_type))
+        printf("long");
+    if(hasFlag(sflags,llint_type))
+        printf("long long");
+    if(hasFlag(sflags,int_type)){
+        if(sflags & ~uint_type & ~signed_type != 0)
+            printf(" ");
+        printf("int");
+    }
+
+    if(hasFlag(sflags,float_type))
+        printf("float");
+    if(hasFlag(sflags,double_type)){
+        if(hasFlag(sflags,lint_type))
+            printf(" ");
+        printf("double");
+    }
+
+    if(hasFlag(sflags,bool_type))
+        printf("_Bool");
+    if(hasFlag(sflags,complex_type))
+        printf(" _Complex");
+
+    printf("\n");
 }

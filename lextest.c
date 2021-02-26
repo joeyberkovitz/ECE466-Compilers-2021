@@ -69,7 +69,7 @@ int main(int argc, char *argv[]) {
 			//Integer/Float Constants
 			case NUMBER:
 				printf("%s\t%d\tNUMBER\t", yylval.lexNode->file, yylval.lexNode->line);
-				switch(yylval.lexNode->flags){
+				switch(yylval.lexNode->tflags){
 					case int_type: printf("INTEGER\t%lld\tINT\n", yylval.lexNode->value.num_val.integer_val); break;
 					case uint_type: printf("INTEGER\t%lld\tUNSIGNED,INT\n", yylval.lexNode->value.num_val.integer_val); break;
 					case lint_type:	printf("INTEGER\t%lld\tLONG\n", yylval.lexNode->value.num_val.integer_val); break;

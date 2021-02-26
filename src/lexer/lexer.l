@@ -108,26 +108,26 @@ _Imaginary			{RET(_IMAGINARY)}
 
 	/* Constants - 6.4.4 */
 	/* Integers - 6.4.4.1 */
-{DECIMAL}					{RETINT(10,int_type)}
-{DECIMAL}[Uu]					{RETINT(10,uint_type)}
-{DECIMAL}[Ll]					{RETINT(10,lint_type)}
-{DECIMAL}{ULONG}				{RETINT(10,ulint_type)}
-{DECIMAL}{LONGLONG}				{RETINT(10,llint_type)}
-{DECIMAL}{ULONGLONG}				{RETINT(10,ullint_type)}
+{DECIMAL}					{RETINT(int_type,10)}
+{DECIMAL}[Uu]					{RETINT(uint_type,10)}
+{DECIMAL}[Ll]					{RETINT(lint_type,10)}
+{DECIMAL}{ULONG}				{RETINT(ulint_type,10)}
+{DECIMAL}{LONGLONG}				{RETINT(llint_type,10)}
+{DECIMAL}{ULONGLONG}				{RETINT(ullint_type,10)}
 
-{OCTAL}						{RETINT(8,int_type)}
-{OCTAL}[Uu]					{RETINT(8,uint_type)}
-{OCTAL}[Ll]					{RETINT(8,lint_type)}
-{OCTAL}{ULONG}					{RETINT(8,ulint_type)}
-{OCTAL}{LONGLONG}				{RETINT(8,llint_type)}
-{OCTAL}{ULONGLONG}				{RETINT(8,ullint_type)}
+{OCTAL}						{RETINT(int_type,8)}
+{OCTAL}[Uu]					{RETINT(uint_type,8)}
+{OCTAL}[Ll]					{RETINT(lint_type,8)}
+{OCTAL}{ULONG}					{RETINT(ulint_type,8)}
+{OCTAL}{LONGLONG}				{RETINT(llint_type,8)}
+{OCTAL}{ULONGLONG}				{RETINT(ullint_type,8)}
 
-{HEX}						{RETINT(16,int_type)}
-{HEX}[Uu]					{RETINT(16,uint_type)}
-{HEX}[Ll]					{RETINT(16,lint_type)}
-{HEX}{ULONG}					{RETINT(16,ulint_type)}
-{HEX}{LONGLONG}					{RETINT(16,llint_type)}
-{HEX}{ULONGLONG}				{RETINT(16,ullint_type)}
+{HEX}						{RETINT(int_type,16)}
+{HEX}[Uu]					{RETINT(uint_type,16)}
+{HEX}[Ll]					{RETINT(lint_type,16)}
+{HEX}{ULONG}					{RETINT(ulint_type,16)}
+{HEX}{LONGLONG}					{RETINT(llint_type,16)}
+{HEX}{ULONGLONG}				{RETINT(ullint_type,16)}
 
 	/* Floats - 6.4.4.2 */
 {FLTDEC}				|

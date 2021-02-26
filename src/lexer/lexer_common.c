@@ -82,8 +82,8 @@ void setStr(union astnode val, char *txt, size_t len){
 }
 
 void setFlag(union astnode val, int flag, char *txt, int orig_flags){
-	val.lexNode->type_flags = flag;
-	if(orig_flags != val.lexNode->type_flags)
+	val.lexNode->tflags = flag;
+	if(orig_flags != val.lexNode->tflags)
 		fprintf(stderr, "%s:%d:Warning:Integer value %s overflowed specified type\n", val.lexNode->file, val.lexNode->line, txt);
 }
 
@@ -94,28 +94,28 @@ void setInt(union astnode val, char *txt, int flags, int base){
 
 	//Check table in 6.4.4.1 for order of type progression	
 	if(errno != ERANGE){
-		if(hasFlag(flags, int_type) && num <= INT_MAX){
-			val.lexNode->type_flags = int_type;
+		if(flags == int_type && num <= INT_MAX){
+			val.lexNode->tflags = int_type;
 			return;
 		}
 
-		if((hasFlag(flags, uint_type) || (hasFlag(flags, int_type) && base != 10)) && !(hasFlag(flags, lint_type) || hasFlag(flags, llint_type)) && num <= UINT_MAX){
+		if((flags == uint_type || (hasFlag(flags,int_type) && base != 10)) && num <= UINT_MAX){
 			setFlag(val, uint_type, txt, flags);
 			return;
 		}
 
-		if((hasFlag(flags, lint_type) || hasFlag(flags, int_type)) && !hasFlag(flags, ulint_type) && num <= LONG_MAX){
+		if((flags == lint_type || flags == int_type) && num <= LONG_MAX){
 			setFlag(val, lint_type, txt, flags);
 			return;
 		}
 
-		if((hasFlag(flags, ulint_type) || hasFlag(flags, uint_type) || ((hasFlag(flags, int_type) || hasFlag(flags, lint_type)) && base != 10)) && !hasFlag(flags, llint_type) && num <= ULONG_MAX){
+		if(((hasFlag(flags,unsigned_type) && !hasFlag(flags,ullint_type)) || (base != 10 && !hasFlag(flags,llint_type))) && num <= ULONG_MAX){
 			setFlag(val, ulint_type, txt, flags);
 			return;
 		}
 	}
-	
-	if((hasFlag(flags, llint_type) || hasFlag(flags, int_type) || hasFlag(flags, lint_type) || (hasFlag(flags, uint_type) && base != 10)) && !(hasFlag(flags, uint_type) && (base == 10 || hasFlag(flags, llint_type)))){
+
+	if(flags == int_type || flags == lint_type || flags == llint_type){	
 		if(num <= LLONG_MAX){
 			setFlag(val, llint_type, txt, flags);
 			return;
@@ -135,17 +135,17 @@ void setInt(union astnode val, char *txt, int flags, int base){
 }
 
 void setFloat(union astnode val, char *txt, int flags){
-	if(hasFlag(flags, float_type)){
+	if(flags == float_type){
 		val.lexNode->value.num_val.float_val = strtof(txt, NULL);
-		val.lexNode->type_flags = float_type;
+		val.lexNode->tflags = float_type;
 	}
-	else if(hasFlag(flags, double_type)){
+	else if(flags == double_type){
 		val.lexNode->value.num_val.double_val = strtod(txt, NULL);
-		val.lexNode->type_flags = double_type;
+		val.lexNode->tflags = double_type;
 	}
 	else{
 		val.lexNode->value.num_val.ldouble_val = strtold(txt, NULL);
-		val.lexNode->type_flags = ldouble_type;
+		val.lexNode->tflags = ldouble_type;
 	}
 }
 

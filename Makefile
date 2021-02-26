@@ -25,7 +25,7 @@ parser: $(OBJS) parsertest.c
 # bison
 $(BUILD_DIR)/%.y.o: %.y
 	$(MKDIR_P) $(dir $@)
-	$(BISON) -o $@.c --defines=$@.h $<
+	$(BISON) -v -o $@.c --defines=$@.h $<
 	$(CC) $(CFLAGS) -c $@.c -o $@
 
 # flex

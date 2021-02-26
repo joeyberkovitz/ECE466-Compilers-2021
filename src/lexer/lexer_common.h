@@ -13,6 +13,7 @@
 #include "parser/parser.y.o.h"
 
 #define hasFlag(x, flag)	((x & flag) == flag)
+
 enum node_type {
     NODE_LEX,
     NODE_UNOP,
@@ -26,8 +27,11 @@ enum node_type {
     NODE_STAG,
     NODE_UTAG,
     NODE_SMEM,
-    NODE_UMEM
+    NODE_UMEM,
     // TODO: labels
+
+    NODE_TYPESPEC,
+    NODE_ARY
 };
 
 typedef union {
@@ -37,7 +41,7 @@ typedef union {
 	long double ldouble_val;
 } NUMTYPE;
 
-enum type_flags {
+enum type_flag {
     void_type = 0x001,
     signed_type = 0x002,
     unsigned_type = 0x004,
@@ -61,7 +65,7 @@ enum type_flags {
     ldcomplex_type = 0x800 | 0x200 | 0x040
 };
 
-enum token_flags {
+enum token_flag {
     flag_escaped = 0x01,
     flag_octal = 0x02, //For processing escaped characters appropriately
     flag_hex = 0x04
@@ -76,16 +80,16 @@ typedef union {
 struct LexVal {
     enum node_type type;
     int sym;
-	char *file;
-	int line;
-	int len;
-	enum token_flags flags;
-    enum type_flags tflags;
-	LexVals value;
+    char *file;
+    int line;
+    int len;
+    enum token_flag flags;
+    enum type_flag tflags;
+    LexVals value;
 };
 
 //Present only for identifying type of node - contains any common fields
-struct astnode_hdr{
+struct astnode_hdr {
     enum node_type type;
 };
 
