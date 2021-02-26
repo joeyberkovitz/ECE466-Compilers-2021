@@ -4,7 +4,7 @@
 	#include "parser_common.h"
 	#include "lexer/lexer_common.h"
 %}
-%define parse.trace
+
 %define api.value.type {union astnode}
 %token <lexNode> IDENT
 %token <lexNode> NUMBER
