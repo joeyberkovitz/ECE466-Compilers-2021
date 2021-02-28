@@ -246,6 +246,10 @@ size_t computeSizeof(struct astnode_hdr* el){
                 case ENTRY_VAR:
                 case ENTRY_SMEM:
                 case ENTRY_UMEM:
+                    //If first child is PTR, then don't care about anything else - size is PTR
+                    if(elUnion.symEntry->child != NULL && elUnion.symEntry->child->type == NODE_PTR)
+                        return sizeof (long);
+
                     //TODO: unions not properly handled and not planned
                     if(elUnion.symEntry->type_spec == NULL) {
                         fprintf(stderr, "Error: sizeof called without any type specifiers\n");
@@ -293,6 +297,9 @@ size_t getStructSize(struct astnode_tag *structNode){
         fprintf(stderr, "Error: getStructSize called with node not of type struct/union tag\n");
         return 0;
     }
+
+    if(structNode->child != NULL && structNode->child->type == NODE_PTR)
+        return sizeof (long);
 
     //TODO: not handling ENTRY_UTAG, just treating as struct
     size_t totalSize = 0;
@@ -481,14 +488,17 @@ struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union 
         ((struct symtab_struct*)structNode->container)->parentStruct = structNode;
     }
 
-    //TODO: is this replace setting correct?
-    union symtab_entry existingEntry = symtabLookup(symtab, TAG, ident->value.string_val, true);
+    if(ident != NULL) {
+        union symtab_entry existingEntry = symtabLookup(symtab, TAG, ident->value.string_val, true);
 
-    //Only enter into symtab under two conditions:
+        //Only enter into symtab under two conditions:
         //1. Existing entry not present
         //2. Existing entry present, but not complete and current entry complete
-    if(ident != NULL && (existingEntry.generic == NULL || (!existingEntry.tag->complete && complete)))
-        symtabEnter(symtab, (union symtab_entry)structNode, true);
+        if (existingEntry.generic == NULL || (!existingEntry.tag->complete && complete))
+            symtabEnter(symtab, (union symtab_entry) structNode, true);
+        else if (existingEntry.generic != NULL && existingEntry.tag->complete && complete)
+            fprintf(stderr, "Attempted redeclaration of struct %s failed\n", ident->value.string_val);
+    }
 
     //Clear entry since it'll be reused for struct members, or if not present declaration is done anyway
     clearEntry(baseEntry);
@@ -511,6 +521,9 @@ size_t getEntrySize(enum symtab_type type){
         case ENTRY_STAG:
         case ENTRY_UTAG:
             return sizeof(struct astnode_tag);
+        default:
+            fprintf(stderr, "Error: unknown type %d passed to getEntrySize\n", type);
+            return 0;
     }
 }
 
@@ -900,8 +913,10 @@ void printDecl(struct symtab *symtab, union symtab_entry entry){
             fprintf(stderr, "Error: attempting to print member info with tab not of type TAB_STRUCT\n");
             structName = "";
         }
-        else
+        else if (((struct symtab_struct*)symtab)->parentStruct->ident != NULL)
             structName = ((struct symtab_struct*)symtab)->parentStruct->ident->value.string_val;
+        else
+            structName = "anonymous";
 
         printf("field of struct %s  off=%zu bit_off=%d bit_wid=%d, type:\n  ",
                structName, entry.memb->structOffset, entry.memb->bitOffset, entry.memb->bitWidth
@@ -973,7 +988,11 @@ void printDecl(struct symtab *symtab, union symtab_entry entry){
             printf(" _Complex");
         if (hasFlag(sflags, struct_type)){
             //TODO: this assumption could likely fail, should be more careful here
-            char *structName = ((struct astnode_tag*)spec_node->type_specs->els[0])->ident->value.string_val;
+            char *structName;
+            if(((struct astnode_tag*)spec_node->type_specs->els[0])->ident == NULL)
+                structName = "anonymous";
+            else
+                structName = ((struct astnode_tag*)spec_node->type_specs->els[0])->ident->value.string_val;
 
             printf("struct %s ", structName);
 
