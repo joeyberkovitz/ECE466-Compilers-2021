@@ -298,9 +298,6 @@ size_t getStructSize(struct astnode_tag *structNode){
         return 0;
     }
 
-    if(structNode->child != NULL && structNode->child->type == NODE_PTR)
-        return sizeof (long);
-
     //TODO: not handling ENTRY_UTAG, just treating as struct
     size_t totalSize = 0;
     struct symtab *structSymtab;
@@ -445,7 +442,10 @@ bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
     new_entry.generic->next = oldHead;
 
     success:
-    printDecl(symtab, new_entry);
+
+    //Struct/union members will have printing occur later
+    if(entry.generic->ns != TAG && entry.generic->ns != MEMBER)
+        printDecl(symtab, new_entry);
     freeInterNodes(entry);
     return true;
 }
@@ -1010,7 +1010,7 @@ void printDecl(struct symtab *symtab, union symtab_entry entry){
     printf("\n");
 }
 
-void printStructEnd(struct astnode_hdr *structHdr){
+void printStruct(struct astnode_hdr *structHdr){
     if(structHdr->type != NODE_SYMTAB ||
         (((struct symtab_entry_generic*)structHdr)->st_type != ENTRY_STAG
                 && ((struct symtab_entry_generic*)structHdr)->st_type != ENTRY_UTAG)){
@@ -1019,6 +1019,20 @@ void printStructEnd(struct astnode_hdr *structHdr){
     }
 
     struct astnode_tag *structNode = (struct astnode_tag*)structHdr;
+
+    struct symtab *parentTab = structNode->container->parent;
+    while(parentTab != NULL && parentTab->scope == SCOPE_STRUCT)
+        parentTab = parentTab->parent;
+
+    //Print struct start info
+    printDecl(parentTab, (union symtab_entry)structNode);
+
+    union symtab_entry currEntry = structNode->container->head;
+    while(currEntry.generic != NULL){
+        printDecl(structNode->container, currEntry);
+
+        currEntry = currEntry.generic->next;
+    }
 
     printf("} (size==%zu)\n", getStructSize(structNode));
 }

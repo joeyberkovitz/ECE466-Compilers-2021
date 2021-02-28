@@ -266,7 +266,7 @@ void freeInterNodes(union symtab_entry entry);
 
 void printDecl(struct symtab *symtab, union symtab_entry entry);
 void printQual(enum qual_flag qflags);
-void printStructEnd(struct astnode_hdr *structHdr);
+void printStruct(struct astnode_hdr *structHdr);
 //void allocAry(union symtab_entry entry, struct LexVal *val);
 
 

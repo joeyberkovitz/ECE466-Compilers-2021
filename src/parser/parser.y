@@ -395,10 +395,10 @@ type-specifier:
 struct-or-union-specifier:
         struct-or-union '{'
                 <hdr>{$$=genStruct($1, currTab, currDecl, (struct LexVal*)NULL, true);}
-                struct-declaration-list '}'              {$$ = $3; printStructEnd($3); exitScope();}
+                struct-declaration-list '}'              {$$ = $3; printStruct($3); exitScope();}
     |   struct-or-union IDENT '{'
                 <hdr>{$$=genStruct($1, currTab, currDecl, $2, true);}
-                struct-declaration-list '}'              {$$ = $4; printStructEnd($4); exitScope();}
+                struct-declaration-list '}'              {$$ = $4; printStruct($4); exitScope();}
     |   struct-or-union IDENT                            {$$=genStruct($1, currTab, currDecl, $2, false);}
     ;
 
