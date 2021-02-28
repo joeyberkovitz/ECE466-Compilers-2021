@@ -602,17 +602,17 @@ void handleStgDefaults(union symtab_entry entry, struct symtab *symtab){
         entry.generic->stgclass = STG_EXTERN;
 }        
 
-void addTypeNode(int *flags, struct astnode_lst *type_list, struct LexVal *val, int flag){
+void addTypeNode(int *flags, struct astnode_lst *type_list, struct astnode_hdr *val, int flag){
     *flags |= flag;
-    addToList(type_list, (struct astnode_hdr*)val);
+    addToList(type_list, val);
 }
 
-void addTypeSpec(union symtab_entry entry, struct LexVal *val){
+void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
     struct astnode_typespec *spec_node = entry.generic->type_spec;
 
     int flag = spec_node->stype;
     if(val->type == NODE_LEX) {
-        switch (val->sym) {
+        switch (((struct LexVal*)val)->sym) {
             case VOID:
                 /* TODO: checks on void */
                 if (flag != 0) {
@@ -726,7 +726,7 @@ void addTypeQual(enum qual_flag *qtype, struct astnode_lst *qual_types, struct L
     switch(val->sym){
         case CONST:
             if(!hasFlag(*qtype,QUAL_CONST))
-                addTypeNode((int*)qtype, qual_types, val, QUAL_CONST);
+                addTypeNode((int*)qtype, qual_types, (struct astnode_hdr *) val, QUAL_CONST);
             break;
         case RESTRICT:
             if(!ptr){
@@ -735,11 +735,11 @@ void addTypeQual(enum qual_flag *qtype, struct astnode_lst *qual_types, struct L
             }
 
             if(!hasFlag(*qtype,QUAL_RESTRICT))
-                addTypeNode((int*)qtype, qual_types, val, QUAL_RESTRICT);
+                addTypeNode((int*)qtype, qual_types, (struct astnode_hdr *) val, QUAL_RESTRICT);
             break;
         case VOLATILE:
             if(!hasFlag(*qtype,QUAL_VOLATILE))
-                addTypeNode((int*)qtype, qual_types, val, QUAL_VOLATILE);
+                addTypeNode((int*)qtype, qual_types, (struct astnode_hdr *) val, QUAL_VOLATILE);
             break;
     }
 }

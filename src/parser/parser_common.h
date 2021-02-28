@@ -253,8 +253,8 @@ size_t getEntrySize(enum symtab_type type);
 
 void setStgSpec(union symtab_entry entry, struct symtab *symtab, struct LexVal *val);
 void handleStgDefaults(union symtab_entry entry, struct symtab *symtab);
-void addTypeNode(int *flags, struct astnode_lst* type_list, struct LexVal *val, int flag);
-void addTypeSpec(union symtab_entry entry, struct LexVal *val);
+void addTypeNode(int *flags, struct astnode_lst* type_list, struct astnode_hdr *val, int flag);
+void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val);
 void addTypeQual(enum qual_flag *qtype, struct astnode_lst *qual_types, struct LexVal *val, bool ptr);
 
 void finalizeSpecs(union symtab_entry entry);

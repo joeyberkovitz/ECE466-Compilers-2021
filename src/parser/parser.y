@@ -87,7 +87,7 @@
 %type  <hdr> init-declarator-list
 %type  <hdr> init-declarator
 %type  <lexNode> storage-class-specifier
-%type  <lexNode> type-specifier
+%type  <hdr> type-specifier
 %type  <hdr> struct-or-union-specifier
 %type  <lexNode> struct-or-union
 %type  <hdr> struct-declaration-list
