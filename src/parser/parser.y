@@ -96,9 +96,9 @@
 %type  <hdr> struct-declarator
 %type  <lexNode> type-qualifier
 %type  <hdr> declarator
-%type  <hdr> direct-declarator
-%type  <hdr> pointer
-%type  <hdr> type-qualifier-list
+%type  <specInter> direct-declarator
+%type  <specInter> pointer
+%type  <ptr> type-qualifier-list
 %type  <hdr> parameter-type-list
 %type  <hdr> parameter-list
 %type  <hdr> parameter-declaration
@@ -347,8 +347,8 @@ declaration-specifier:
     /* TODO: ensure at most one of each */
     /* TODO: adjustment made from spec - converted to list - check this is valid */
         storage-class-specifier     {setStgSpec(currDecl, currTab, $1);}
-    |   type-specifier              {addTypeSpecQual(currDecl, $1, SPEC_TYPE_SPEC);}
-    |   type-qualifier              {addTypeSpecQual(currDecl, $1, SPEC_TYPE_QUAL);}
+    |   type-specifier              {addTypeSpec(currDecl, $1);}
+    |   type-qualifier              {addTypeQual(&currDecl.generic->type_spec->qtype, currDecl.generic->type_spec->type_quals, $1, false);}
     /* TODO: ignored for assign 3: |   function-specifier */
     ;
 
@@ -417,7 +417,7 @@ specifier-qualifier-list:
     ;
 
 specifier-qualifier:
-        type-specifier    {printf("s");}
+        type-specifier
     |   type-qualifier
     ;
 
@@ -472,26 +472,26 @@ declarator:
     ;
 
 direct-declarator:
-        IDENT    {currDecl.generic->ident = $1;}
-    |   '(' declarator ')'    /* throw away parentheses */
+        IDENT                                                                        {currDecl.generic->ident = $1; $$ = (struct astnode_spec_inter*)currDecl.generic->type_spec->parent;}
+    |   '(' {$<specInter>$ = currDecl.generic->type_spec->parent;} declarator ')'    {$$ = $<specInter>2;}
     /* Not per spec, adjusted per assignment 3 */
-    |   direct-declarator '[' NUMBER ']'
-    |   direct-declarator '[' ']'
+    |   direct-declarator '[' NUMBER ']'                                             {$$ = allocAry($1, $3, currDecl, currTab);}
+    |   direct-declarator '[' ']'                                                    {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab);}
     |   direct-declarator '(' parameter-type-list ')'
     |   direct-declarator '(' identifier-list ')'
     |   direct-declarator '(' ')'
     ;
 
 pointer:
-        '*'
-    |   '*' type-qualifier-list
-    |   '*' type-qualifier-list pointer
-    |   '*' pointer
+        '*'                                {$$ = setPtr((struct astnode_spec_inter*)allocPtr(), (struct astnode_spec_inter*)currDecl.generic->type_spec, currDecl);}
+    |   '*' type-qualifier-list            {$$ = setPtr((struct astnode_spec_inter*)$2, (struct astnode_spec_inter*)currDecl.generic->type_spec, currDecl);}
+    |   pointer '*' type-qualifier-list    {$$ = setPtr((struct astnode_spec_inter*)$3, $1, currDecl);}
+    |   pointer '*'                        {$$ = setPtr((struct astnode_spec_inter*)allocPtr(),$1 , currDecl);}
     ;
 
 type-qualifier-list:
-        type-qualifier
-    |   type-qualifier-list type-qualifier
+        type-qualifier                        {$$ = allocPtr(); addTypeQual(&$$->qtype, $$->type_quals, $1, true);}
+    |   type-qualifier-list type-qualifier    {$$ = $1; addTypeQual(&$$->qtype, $$->type_quals, $2, true);}
     ;
 
 parameter-type-list:

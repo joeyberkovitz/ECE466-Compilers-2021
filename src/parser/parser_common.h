@@ -80,6 +80,7 @@ enum qual_flag {
 
 struct symtab_entry_generic {
     enum node_type type;
+    struct astnode_spec_inter *parent, *child;
     enum symtab_type st_type;
     union symtab_entry prev;
     union symtab_entry next;
@@ -89,7 +90,7 @@ struct symtab_entry_generic {
     //Specifiers
     enum storage_class stgclass;
     struct LexVal *storageNode;
-    struct astnode_hdr *type_spec;
+    struct astnode_typespec *type_spec;
     /*struct astnode_hdr **typeSpec;
     size_t numTypeSpec;
     struct LexVal *typeQual;*/
@@ -97,6 +98,7 @@ struct symtab_entry_generic {
 
 struct astnode_varmem {
     enum node_type type;
+    struct astnode_spec_inter *parent, *child;
     enum symtab_type st_type;
     union symtab_entry prev;
     union symtab_entry next;
@@ -104,11 +106,12 @@ struct astnode_varmem {
     struct LexVal *ident;
     enum storage_class stgclass;
     struct LexVal *storageNode;
-    struct astnode_hdr *type_spec;
+    struct astnode_typespec *type_spec;
 };
 
 struct astnode_fncndec {
     enum node_type type;
+    struct astnode_spec_inter *parent, *child;
     enum symtab_type st_type;
     union symtab_entry prev;
     union symtab_entry next;
@@ -116,7 +119,7 @@ struct astnode_fncndec {
     struct LexVal *ident;
     enum storage_class stgclass;
     struct LexVal *storageNode;
-    struct astnode_hdr *type_spec;
+    struct astnode_typespec *type_spec;
 
     bool unknown;
     struct symtab *scope;
@@ -124,6 +127,7 @@ struct astnode_fncndec {
 
 struct astnode_tag {
     enum node_type type;
+    struct astnode_spec_inter *parent, *child;
     enum symtab_type st_type;
     union symtab_entry prev;
     union symtab_entry next;
@@ -131,7 +135,7 @@ struct astnode_tag {
     struct LexVal *ident;
     enum storage_class stgclass;
     struct LexVal *storageNode;
-    struct astnode_hdr *type_spec;
+    struct astnode_typespec *type_spec;
 
     bool complete;
     struct symtab *container;
@@ -139,9 +143,16 @@ struct astnode_tag {
 
 /* TODO: labels at label-statements */
 
+// header for type specifiers, pointers and arrays
+struct astnode_spec_inter {
+    enum node_type type;
+    struct astnode_spec_inter *parent, *child;
+};
+
 struct astnode_typespec {
     enum node_type type;
-    struct astnode_hdr *parent;
+    struct astnode_spec_inter *parent, *child; // child for header
+
     enum type_flag stype;
     enum qual_flag qtype;
 
@@ -151,8 +162,19 @@ struct astnode_typespec {
 
 struct astnode_ary {
     enum node_type type;
-    struct astnode_hdr *parent, *stype;
+    struct astnode_spec_inter *parent, *child;
+
     int length;
+    bool complete;
+};
+
+struct astnode_ptr {
+    enum node_type type;
+    struct astnode_spec_inter *parent, *child;
+
+    enum qual_flag qtype;
+
+    struct astnode_lst *type_quals;
 };
 
 struct symtab {
@@ -174,14 +196,18 @@ size_t getEntrySize(enum symtab_type type);
 
 void setStgSpec(union symtab_entry entry, struct symtab *symtab, struct LexVal *val);
 void handleStgDefaults(union symtab_entry entry, struct symtab *symtab);
-void addTypeSpecQualNode(struct astnode_typespec* spec_node, struct LexVal *val, enum type_flag flag, enum entry_spec_type type);
-void addTypeSpecQual(union symtab_entry entry, struct LexVal *val, enum entry_spec_type type);
-
+void addTypeNode(int *flags, struct astnode_lst* type_list, struct LexVal *val, int flag);
+void addTypeSpec(union symtab_entry entry, struct LexVal *val);
+void addTypeQual(enum qual_flag *qtype, struct astnode_lst *qual_types, struct LexVal *val, bool ptr);
 void finalizeSpecs(union symtab_entry entry);
 
-void printDecl(union symtab_entry entry);
-//void allocAry(union symtab_entry entry, struct LexVal *val);
+struct astnode_ptr* allocPtr();
+struct astnode_spec_inter* setPtr(struct astnode_spec_inter *ptr, struct astnode_spec_inter *next, union symtab_entry entry);
+struct astnode_spec_inter* allocAry(struct astnode_spec_inter *prev, struct LexVal *val, union symtab_entry entry, struct symtab *symtab);
+void freeInterNodes(union symtab_entry entry);
 
+void printQual(enum qual_flag qflags);
+void printDecl(union symtab_entry entry);
 
 struct symtab *currTab;
 union symtab_entry currDecl;

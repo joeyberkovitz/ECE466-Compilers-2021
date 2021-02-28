@@ -32,7 +32,8 @@ enum node_type {
 
     NODE_SYMTAB, //if present - need to check st_type for more details
     NODE_TYPESPEC,
-    NODE_ARY
+    NODE_ARY,
+    NODE_PTR
 };
 
 typedef union {
@@ -136,6 +137,9 @@ union astnode {
     struct astnode_fncndec *fncndec;
     struct astnode_tag *tag;
     // TODO: labels
+
+    struct astnode_ptr *ptr;
+    struct astnode_spec_inter *specInter;
 };
 
 union astnode yylval;
