@@ -63,7 +63,8 @@ enum type_flag {
     complex_type = 0x800,
     fcomplex_type = 0x800 | 0x100,
     dcomplex_type = 0x800 | 0x200,
-    ldcomplex_type = 0x800 | 0x200 | 0x040
+    ldcomplex_type = 0x800 | 0x200 | 0x040,
+    struct_type = 0x1000
 };
 
 enum token_flag {
@@ -135,6 +136,7 @@ union astnode {
     struct astnode_varmem *varMem;
     struct astnode_fncndec *fncndec;
     struct astnode_tag *tag;
+    struct astnode_struct *nodeStruct;
     // TODO: labels
 };
 

@@ -3,7 +3,9 @@
 %{
 	#include "parser_common.h"
 	#include "lexer/lexer_common.h"
+    #define RETHDR(in,out) out=(struct astnode_hdr*)in;
 %}
+//For debugging
 %define parse.trace
 %define api.value.type {union astnode}
 %token <lexNode> IDENT
@@ -85,7 +87,7 @@
 %type  <hdr> init-declarator-list
 %type  <hdr> init-declarator
 %type  <lexNode> storage-class-specifier
-%type  <lexNode> type-specifier
+%type  <hdr> type-specifier
 %type  <hdr> struct-or-union-specifier
 %type  <lexNode> struct-or-union
 %type  <hdr> struct-declaration-list
@@ -348,7 +350,7 @@ declaration-specifier:
     /* TODO: adjustment made from spec - converted to list - check this is valid */
         storage-class-specifier     {setStgSpec(currDecl, currTab, $1);}
     |   type-specifier              {addTypeSpecQual(currDecl, $1, SPEC_TYPE_SPEC);}
-    |   type-qualifier              {addTypeSpecQual(currDecl, $1, SPEC_TYPE_QUAL);}
+    |   type-qualifier              {addTypeSpecQual(currDecl, (struct astnode_hdr*)$1, SPEC_TYPE_QUAL);}
     /* TODO: ignored for assign 3: |   function-specifier */
     ;
 
@@ -373,32 +375,36 @@ storage-class-specifier:
 
     /* 6.7.2 - Type specifiers */
 type-specifier:
-        VOID        {$$ = $1;}
-    |   CHAR        {$$ = $1;}
-    |   SHORT       {$$ = $1;}
-    |   INT         {$$ = $1;}
-    |   LONG        {$$ = $1;}
-    |   FLOAT       {$$ = $1;}
-    |   DOUBLE      {$$ = $1;}
-    |   SIGNED      {$$ = $1;}
-    |   UNSIGNED    {$$ = $1;}
-    |   _BOOL       {$$ = $1;}
-    |   _COMPLEX    {$$ = $1;}
-    |   struct-or-union-specifier
+        VOID        {RETHDR($1,$$)}
+    |   CHAR        {RETHDR($1,$$)}
+    |   SHORT       {RETHDR($1,$$)}
+    |   INT         {RETHDR($1,$$)}
+    |   LONG        {RETHDR($1,$$)}
+    |   FLOAT       {RETHDR($1,$$)}
+    |   DOUBLE      {RETHDR($1,$$)}
+    |   SIGNED      {RETHDR($1,$$)}
+    |   UNSIGNED    {RETHDR($1,$$)}
+    |   _BOOL       {RETHDR($1,$$)}
+    |   _COMPLEX    {RETHDR($1,$$)}
+    |   struct-or-union-specifier {$$ = $1;}
     /* TODO: ignored here: |   enum-specifier */
     /* TODO: Ignored here: |   typedef-name */
     ;
 
     /* 6.7.2.1 - Struct/union specifiers */
 struct-or-union-specifier:
-        struct-or-union '{' struct-declaration-list '}'
-    |   struct-or-union IDENT '{' struct-declaration-list '}'
-    |   struct-or-union IDENT
+        struct-or-union '{'
+                <hdr>{$$=genStruct($1, currTab, currDecl, (struct LexVal*)NULL, true);}
+                struct-declaration-list '}'              {$$ = $3; printStructEnd(); exitScope();}
+    |   struct-or-union IDENT '{'
+                <hdr>{$$=genStruct($1, currTab, currDecl, $2, true);}
+                struct-declaration-list '}'              {$$ = $4; printStructEnd(); exitScope();}
+    |   struct-or-union IDENT                            {$$=genStruct($1, currTab, currDecl, $2, false); exitScope();}
     ;
 
 struct-or-union:
-        STRUCT
-    |   UNION
+        STRUCT  {$$ = $1;}
+    |   UNION   {$$ = $1;}
     ;
 
 struct-declaration-list:
@@ -407,7 +413,7 @@ struct-declaration-list:
     ;
 
 struct-declaration:
-        specifier-qualifier-list struct-declarator-list ';'
+        specifier-qualifier-list struct-declarator-list ';' {clearEntry(currDecl);}
     ;
 
 specifier-qualifier-list:
@@ -417,13 +423,13 @@ specifier-qualifier-list:
     ;
 
 specifier-qualifier:
-        type-specifier    {printf("s");}
-    |   type-qualifier
+        type-specifier    {addTypeSpecQual(currDecl, $1, SPEC_TYPE_SPEC);}
+    |   type-qualifier    {addTypeSpecQual(currDecl, (struct astnode_hdr*)$1, SPEC_TYPE_QUAL);}
     ;
 
 struct-declarator-list:
-        struct-declarator
-    |   struct-declarator-list ',' struct-declarator
+        struct-declarator                               {structMembEnter(currTab, currDecl);}
+    |   struct-declarator-list ',' struct-declarator    {structMembEnter(currTab, currDecl);}
     ;
 
 struct-declarator:

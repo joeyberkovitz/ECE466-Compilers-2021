@@ -20,7 +20,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	register_printf_specifier('S', print_esc_str, print_esc_strinfo);
-	yydebug = 1;
+	//yydebug = 1;
 	yyparse();
 	return 0;
 }

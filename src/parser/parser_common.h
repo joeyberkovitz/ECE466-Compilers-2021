@@ -45,7 +45,12 @@ enum symtab_scope {
     SCOPE_FILE,
     SCOPE_FUNC,
     SCOPE_BLOCK,
-    SCOPE_PROTO
+    SCOPE_PROTO,
+
+    //Not per spec, but indicates in struct
+    //only store members instead of variables
+    //nested structs go in outer scope
+    SCOPE_STRUCT
 };
 
 struct symtab;
@@ -96,6 +101,7 @@ struct symtab_entry_generic {
 };
 
 struct astnode_varmem {
+    //Generic values:
     enum node_type type;
     enum symtab_type st_type;
     union symtab_entry prev;
@@ -164,9 +170,13 @@ struct symtab {
 };
 
 struct symtab* symtabCreate(enum symtab_scope scope);
+void exitScope();
 void symtabDestroy(struct symtab *symtab);
 union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name);
 bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace);
+bool structMembEnter(struct symtab *symtab, union symtab_entry entry);
+struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union symtab_entry baseEntry, struct LexVal *ident, bool complete);
+
 struct symtab_entry_generic* allocEntry(enum symtab_type type, bool clear);
 struct symtab_entry_generic* clearEntry(union symtab_entry entry);
 struct symtab_entry_generic* copyEntry(union symtab_entry entry);
@@ -174,12 +184,13 @@ size_t getEntrySize(enum symtab_type type);
 
 void setStgSpec(union symtab_entry entry, struct symtab *symtab, struct LexVal *val);
 void handleStgDefaults(union symtab_entry entry, struct symtab *symtab);
-void addTypeSpecQualNode(struct astnode_typespec* spec_node, struct LexVal *val, enum type_flag flag, enum entry_spec_type type);
-void addTypeSpecQual(union symtab_entry entry, struct LexVal *val, enum entry_spec_type type);
+void addTypeSpecQualNode(struct astnode_typespec* spec_node, struct astnode_hdr *val, enum type_flag flag, enum entry_spec_type type);
+void addTypeSpecQual(union symtab_entry entry, struct astnode_hdr *val, enum entry_spec_type type);
 
 void finalizeSpecs(union symtab_entry entry);
 
-void printDecl(union symtab_entry entry);
+void printDecl(struct symtab *symtab, union symtab_entry entry);
+void printStructEnd();
 //void allocAry(union symtab_entry entry, struct LexVal *val);
 
 
