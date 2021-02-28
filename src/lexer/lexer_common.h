@@ -22,14 +22,6 @@ enum node_type {
     NODE_LST,
     NODE_FNCN,
 
-    NODE_VAR,
-    NODE_FNCNDEC,
-    NODE_STAG,
-    NODE_UTAG,
-    NODE_SMEM,
-    NODE_UMEM,
-    // TODO: labels
-
     NODE_SYMTAB, //if present - need to check st_type for more details
     NODE_TYPESPEC,
     NODE_ARY
@@ -133,6 +125,7 @@ union astnode {
     struct astnode_lst *lst;
     struct astnode_fncn *fncn;
 
+    struct symtab_entry_generic *symEntry;
     struct astnode_varmem *varMem;
     struct astnode_fncndec *fncndec;
     struct astnode_tag *tag;

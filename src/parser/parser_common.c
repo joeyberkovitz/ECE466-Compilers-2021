@@ -235,8 +235,108 @@ struct astnode_hdr* allocFunc(struct astnode_hdr *name, struct astnode_lst *lst)
     return (struct astnode_hdr *) fncn;
 }
 
-struct symtab* symtabCreate(enum symtab_scope scope){
-    struct symtab *symtab = mallocSafe(sizeof (struct symtab));
+size_t computeSizeof(struct astnode_hdr* el){
+    union astnode elUnion = (union astnode)el;
+
+    switch (el->type) {
+        case NODE_SYMTAB:
+            switch (elUnion.symEntry->st_type) {
+                case ENTRY_GENERIC:
+                    break;
+                case ENTRY_VAR:
+                case ENTRY_SMEM:
+                case ENTRY_UMEM:
+                    //TODO: unions not properly handled and not planned
+                    if(elUnion.symEntry->type_spec == NULL) {
+                        fprintf(stderr, "Error: sizeof called without any type specifiers\n");
+                        return 0;
+                    }
+                    if(elUnion.symEntry->type_spec->type != NODE_TYPESPEC){
+                        //TODO: this might not be an error
+                        fprintf(stderr, "Error: sizeof called, but typespec node isn't of type NODE_TYPESPEC\n");
+                        return 0;
+                    }
+                    struct astnode_typespec *specNode = (struct astnode_typespec *)elUnion.symEntry->type_spec;
+                    if(hasFlag(specNode->stype, char_type) || hasFlag(specNode->stype, bool_type))
+                        return 1;
+                    else if(hasFlag(specNode->stype, sint_type) || hasFlag(specNode->stype, int_type) ||
+                            hasFlag(specNode->stype, lint_type) || hasFlag(specNode->stype, llint_type))
+                        return sizeof(long long);
+                    else if(hasFlag(specNode->stype, complex_type))
+                        return sizeof(long double)*2;
+                    else if(hasFlag(specNode->stype, float_type) || hasFlag(specNode->stype, double_type) ||
+                            hasFlag(specNode->stype, ldouble_type))
+                        return sizeof(long double);
+                    else if(hasFlag(specNode->stype, struct_type))
+                        //TODO: it may be wrong to assume that if struct_type is present, struct is only type_spec
+                        return getStructSize((struct astnode_tag*)specNode->type_specs->els[0]);
+                    break;
+                case ENTRY_STAG:
+                case ENTRY_UTAG:
+                    break;
+                case ENTRY_FNCN:
+                    fprintf(stderr, "Error: sizeof can't be applied to function\n");
+                    return 0;
+            }
+            break;
+        default:
+            fprintf(stderr, "Unknown type %d passed to sizeof - unable to compute size\n", el->type);
+            return 0;
+    }
+
+    fprintf(stderr, "Error: failed to compute sizeof\n");
+    return 0;
+}
+
+size_t getStructSize(struct astnode_tag *structNode){
+    if(structNode->type != NODE_SYMTAB || (structNode->st_type != ENTRY_STAG && structNode->st_type != ENTRY_UTAG)){
+        fprintf(stderr, "Error: getStructSize called with node not of type struct/union tag\n");
+        return 0;
+    }
+
+    //TODO: not handling ENTRY_UTAG, just treating as struct
+    size_t totalSize = 0;
+    struct symtab *structSymtab;
+    if(structNode->complete && structNode->container != NULL)
+        structSymtab = structNode->container;
+    else {
+        //TODO: will we always be in the correct symbol table when attempting to compute sizeof?
+        union symtab_entry lookupVal = symtabLookup(currTab, TAG, structNode->ident->value.string_val, false);
+        if(lookupVal.generic == NULL ||
+            (lookupVal.generic->st_type != ENTRY_STAG && lookupVal.generic->st_type != ENTRY_UTAG) ||
+            !lookupVal.tag->complete || lookupVal.tag->container == NULL
+        ){
+            fprintf(stderr, "Attempting to compute sizeof struct/union %s with incomplete type\n",
+                    structNode->ident->value.string_val);
+            return 0;
+        }
+        structSymtab = lookupVal.tag->container;
+    }
+
+    union symtab_entry currEntry = structSymtab->head;
+    while(currEntry.generic != NULL){
+        totalSize += computeSizeof((struct astnode_hdr*)currEntry.generic);
+        currEntry = currEntry.generic->next;
+    }
+
+    return totalSize;
+}
+
+size_t getTabSize(enum tab_type tabType){
+    switch (tabType) {
+        case TAB_GENERIC:
+            return sizeof (struct symtab);
+        case TAB_STRUCT:
+            return sizeof (struct symtab_struct);
+        default:
+            fprintf(stderr, "Error: getTabSize called with unknown tabType %d\n", tabType);
+            return 0;
+    }
+}
+
+struct symtab* symtabCreate(enum symtab_scope scope, enum tab_type tabType){
+    struct symtab *symtab = mallocSafe(getTabSize(tabType));
+    symtab->tabType = tabType;
     symtab->scope = scope;
     symtab->parent = currTab;
     symtab->head.generic = NULL;
@@ -282,7 +382,7 @@ void symtabDestroy(struct symtab *symtab){
     currTab = nextTab;
 }
 
-union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name){
+union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name, bool singleScope){
     if(symtab == NULL)
         return (union symtab_entry)(struct symtab_entry_generic*)NULL;
 
@@ -297,7 +397,9 @@ union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *
         currEntry = nextEntry;
     }
 
-    return symtabLookup(symtab->parent, ns, name);
+    if(singleScope)
+        return (union symtab_entry)(struct symtab_entry_generic*)NULL;
+    return symtabLookup(symtab->parent, ns, name, false);
 }
 
 bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
@@ -309,7 +411,7 @@ bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
     if(entry.generic->stgclass == 0 && symtab->scope != SCOPE_PROTO)
         handleStgDefaults(entry, symtab);
 
-    union symtab_entry existingVal = symtabLookup(symtab, entry.generic->ns, entry.generic->ident->value.string_val);
+    union symtab_entry existingVal = symtabLookup(symtab, entry.generic->ns, entry.generic->ident->value.string_val, true);
     if(existingVal.generic != NULL){
         if(replace){
             if(existingVal.generic->next.generic != NULL)
@@ -317,7 +419,11 @@ bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
 
             if(existingVal.generic->prev.generic != NULL)
                 existingVal.generic->prev.generic->next = entry;
-            return true;
+            else if(existingVal.generic->prev.generic == NULL)
+                //Edge case: we are replacing the head of the linked list
+                symtab->head = entry;
+
+            goto success;
         }
         else{
             fprintf(stderr, "Warning: value already exists in symtab and replace not set, ignoring\n");
@@ -331,14 +437,32 @@ bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
     entry.generic->prev.generic = NULL;
     entry.generic->next = oldHead;
 
+    success:
     printDecl(symtab, entry);
     return true;
 }
 
 bool structMembEnter(struct symtab *symtab, union symtab_entry entry){
-    //TODO: if member has additional values to generic, need to allocate and memcpy over
-    entry.generic->st_type=ENTRY_SMEM;
-    entry.generic->ns=MEMBER;
+    struct astnode_memb *membNode = (struct astnode_memb*)allocEntry(ENTRY_SMEM, false);
+    memcpy(membNode, entry.generic, getEntrySize(entry.generic->st_type));
+
+    membNode->type=NODE_SYMTAB;
+    membNode->st_type=ENTRY_SMEM;
+    membNode->ns=MEMBER;
+
+    struct astnode_tag *structNode = ((struct symtab_struct*)symtab)->parentStruct;
+    membNode->bitOffset = 0;
+    membNode->bitWidth = 0;
+    membNode->structOffset = getStructSize(structNode);
+
+    return symtabEnter(symtab, (union symtab_entry)membNode, false);
+}
+
+bool varEnter(struct symtab *symtab, union symtab_entry entry){
+    //TODO: if var has additional values to generic, need to allocate and memcpy over
+    entry.generic->type = NODE_SYMTAB;
+    entry.generic->st_type=ENTRY_VAR;
+    entry.generic->ns=OTHER;
     return symtabEnter(symtab, entry, false);
 }
 
@@ -351,11 +475,19 @@ struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union 
     structNode->complete = complete;
     structNode->ident = ident;
     structNode->ns = TAG;
-    structNode->container = complete ? symtabCreate(SCOPE_STRUCT) : NULL;
+    structNode->container = complete ? symtabCreate(SCOPE_STRUCT, TAB_STRUCT) : NULL;
+    if(structNode->container != NULL){
+        ((struct symtab_struct*)structNode->container)->parentStruct = structNode;
+    }
 
     //TODO: is this replace setting correct?
-    if(ident != NULL)
-        symtabEnter(symtab, (union symtab_entry)structNode, !complete);
+    union symtab_entry existingEntry = symtabLookup(symtab, TAG, ident->value.string_val, true);
+
+    //Only enter into symtab under two conditions:
+        //1. Existing entry not present
+        //2. Existing entry present, but not complete and current entry complete
+    if(ident != NULL && (existingEntry.generic == NULL || (!existingEntry.tag->complete && complete)))
+        symtabEnter(symtab, (union symtab_entry)structNode, true);
 
     //Clear entry since it'll be reused for struct members, or if not present declaration is done anyway
     clearEntry(baseEntry);
@@ -369,9 +501,10 @@ size_t getEntrySize(enum symtab_type type){
         case ENTRY_GENERIC:
             return sizeof(struct symtab_entry_generic);
         case ENTRY_VAR:
+            return sizeof(struct astnode_var);
         case ENTRY_SMEM:
         case ENTRY_UMEM:
-            return sizeof(struct astnode_varmem);
+            return sizeof(struct astnode_memb);
         case ENTRY_FNCN:
             return sizeof(struct astnode_fncndec);
         case ENTRY_STAG:
@@ -393,11 +526,13 @@ struct symtab_entry_generic* allocEntry(enum symtab_type type, bool clear){
 }
 
 struct symtab_entry_generic* clearEntry(union symtab_entry entry){
+    enum node_type nodeType = entry.generic->type;
     enum symtab_type type = entry.generic->st_type;
     size_t size = getEntrySize(type);
     //TODO: potential memory leak due to un-freed elements in the entry
     memset(entry.generic, 0, size);
     entry.generic->st_type = type;
+    entry.generic->type = nodeType; //This should always be NODE_SYMTAB here
 }
 
 struct symtab_entry_generic* copyEntry(union symtab_entry entry){
@@ -654,7 +789,7 @@ void printDecl(struct symtab *symtab, union symtab_entry entry){
             break;
     }
 
-    bool isTag = false;
+    bool isTag = false, isMemb=false;
     switch (entry.generic->ns) {
         case OTHER:
             usage = "variable";
@@ -666,7 +801,7 @@ void printDecl(struct symtab *symtab, union symtab_entry entry){
             usage = "label";
             break;
         case MEMBER:
-            usage = "field";
+            isMemb = true;
             break;
     }
 
@@ -683,9 +818,23 @@ void printDecl(struct symtab *symtab, union symtab_entry entry){
         return;
     }
 
-    printf("%s is defined at %s:%d [in %s scope] as a \n%s with stgclass %s  of type:\n  ",
-           entry.generic->ident->value.string_val, entry.generic->ident->file, entry.generic->ident->line,
-           scope, usage, storage);
+    printf("%s is defined at %s:%d [in %s scope] as a \n", entry.generic->ident->value.string_val,
+           entry.generic->ident->file, entry.generic->ident->line, scope);
+    if(isMemb) {
+        char *structName;
+        if (symtab->tabType != TAB_STRUCT) {
+            fprintf(stderr, "Error: attempting to print member info with tab not of type TAB_STRUCT\n");
+            structName = "";
+        }
+        else
+            structName = ((struct symtab_struct*)symtab)->parentStruct->ident->value.string_val;
+
+        printf("field of struct %s  off=%zu bit_off=%d bit_wid=%d, type:\n  ",
+               structName, entry.memb->structOffset, entry.memb->bitOffset, entry.memb->bitWidth
+        );
+    }
+    else
+        printf("%s with stgclass %s  of type:\n  ", usage, storage);
 
     /* TODO: iterate over pointers, arrays, functions */
     struct astnode_typespec *spec_node = (struct astnode_typespec*)entry.generic->type_spec;
@@ -731,11 +880,35 @@ void printDecl(struct symtab *symtab, union symtab_entry entry){
             printf("_Bool");
         if (hasFlag(sflags, complex_type))
             printf(" _Complex");
+        if (hasFlag(sflags, struct_type)){
+            //TODO: this assumption could likely fail, should be more careful here
+            char *structName = ((struct astnode_tag*)spec_node->type_specs->els[0])->ident->value.string_val;
+
+            printf("struct %s ", structName);
+
+            struct astnode_tag *structDef = symtabLookup(symtab, TAG, structName, false).tag;
+            if(structDef == NULL)
+                printf("(incomplete)");
+            else if(!structDef->complete) //TODO: remove this to agree with Professor's output
+                printf("(incomplete defined at %s:%d)", structDef->ident->file, structDef->ident->line);
+            else
+                printf("(defined at %s:%d)", structDef->ident->file, structDef->ident->line);
+            //TODO: lookup struct in curr table and print incomplete/location defined
+        }
     }
 
     printf("\n");
 }
 
-void printStructEnd(){
-    printf("} (size==?)\n");
+void printStructEnd(struct astnode_hdr *structHdr){
+    if(structHdr->type != NODE_SYMTAB ||
+        (((struct symtab_entry_generic*)structHdr)->st_type != ENTRY_STAG
+                && ((struct symtab_entry_generic*)structHdr)->st_type != ENTRY_UTAG)){
+        fprintf(stderr, "Error: printStructEnd called with non-struct node\n");
+        return;
+    }
+
+    struct astnode_tag *structNode = (struct astnode_tag*)structHdr;
+
+    printf("} (size==%zu)\n", getStructSize(structNode));
 }

@@ -118,7 +118,7 @@
 %initial-action {
     //Space to perform initialization actions at beginning of yyparse()
     //Init file scope symbol table here
-    currTab = symtabCreate(SCOPE_FILE);
+    currTab = symtabCreate(SCOPE_FILE, TAB_GENERIC);
     currDecl.generic = allocEntry(ENTRY_GENERIC, true);
 };
 
@@ -355,8 +355,8 @@ declaration-specifier:
     ;
 
 init-declarator-list:
-        init-declarator                             {(struct astnode_hdr*)symtabEnter(currTab, currDecl, false);}
-    |   init-declarator-list ',' init-declarator    {(struct astnode_hdr*)symtabEnter(currTab, currDecl, false);}
+        init-declarator                             {varEnter(currTab, currDecl);}
+    |   init-declarator-list ',' init-declarator    {varEnter(currTab, currDecl);}
     ;
 
 init-declarator:
@@ -395,11 +395,11 @@ type-specifier:
 struct-or-union-specifier:
         struct-or-union '{'
                 <hdr>{$$=genStruct($1, currTab, currDecl, (struct LexVal*)NULL, true);}
-                struct-declaration-list '}'              {$$ = $3; printStructEnd(); exitScope();}
+                struct-declaration-list '}'              {$$ = $3; printStructEnd($3); exitScope();}
     |   struct-or-union IDENT '{'
                 <hdr>{$$=genStruct($1, currTab, currDecl, $2, true);}
-                struct-declaration-list '}'              {$$ = $4; printStructEnd(); exitScope();}
-    |   struct-or-union IDENT                            {$$=genStruct($1, currTab, currDecl, $2, false); exitScope();}
+                struct-declaration-list '}'              {$$ = $4; printStructEnd($4); exitScope();}
+    |   struct-or-union IDENT                            {$$=genStruct($1, currTab, currDecl, $2, false);}
     ;
 
 struct-or-union:

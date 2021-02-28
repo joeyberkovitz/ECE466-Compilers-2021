@@ -22,6 +22,13 @@ struct astnode_lst* allocList(struct astnode_hdr *el);
 void addToList(struct astnode_lst *lst, struct astnode_hdr *el);
 
 struct astnode_hdr* allocFunc(struct astnode_hdr *name, struct astnode_lst *lst);
+size_t computeSizeof(struct astnode_hdr* el);
+size_t getStructSize(struct astnode_tag *structNode);
+
+enum tab_type {
+    TAB_GENERIC,
+    TAB_STRUCT
+};
 
 enum symtab_type {
     ENTRY_GENERIC,
@@ -57,7 +64,8 @@ struct symtab;
 
 union symtab_entry {
     struct symtab_entry_generic *generic;
-    struct astnode_varmem *varmem;
+    struct astnode_var *var;
+    struct astnode_memb *memb;
     struct astnode_fncndec *fncn;
     struct astnode_tag *tag;
     // TODO: labels
@@ -100,7 +108,7 @@ struct symtab_entry_generic {
     struct LexVal *typeQual;*/
 };
 
-struct astnode_varmem {
+struct astnode_var {
     //Generic values:
     enum node_type type;
     enum symtab_type st_type;
@@ -111,6 +119,28 @@ struct astnode_varmem {
     enum storage_class stgclass;
     struct LexVal *storageNode;
     struct astnode_hdr *type_spec;
+
+    //Variable specific values:
+    long long offset; //Stack frame offset for auto storage
+};
+
+struct astnode_memb {
+    //Generic values:
+    enum node_type type;
+    enum symtab_type st_type;
+    union symtab_entry prev;
+    union symtab_entry next;
+    enum symtab_ns ns;
+    struct LexVal *ident;
+    enum storage_class stgclass;
+    struct LexVal *storageNode;
+    struct astnode_hdr *type_spec;
+
+    //Struct/Union member specific attributes
+    size_t structOffset;
+    //Unsupported but params present:
+    char bitWidth;
+    char bitOffset;
 };
 
 struct astnode_fncndec {
@@ -162,6 +192,7 @@ struct astnode_ary {
 };
 
 struct symtab {
+    enum tab_type tabType;
     enum symtab_scope scope;
     struct symtab *parent;
     struct symtab **children; //Array of pointers to direct children - dynamically allocated
@@ -169,12 +200,27 @@ struct symtab {
     union symtab_entry head;
 };
 
-struct symtab* symtabCreate(enum symtab_scope scope);
+struct symtab_struct {
+    enum tab_type tabType;
+    enum symtab_scope scope;
+    struct symtab *parent;
+    struct symtab **children; //Array of pointers to direct children - dynamically allocated
+    size_t numChildren; //Number of children pointers allocated
+    union symtab_entry head;
+
+    //Struct specific els:
+    struct astnode_tag *parentStruct;
+};
+
+size_t getTabSize(enum tab_type tabType);
+struct symtab* symtabCreate(enum symtab_scope scope, enum tab_type tabType);
+//Traverse up to parent scope without destroying current scope (ex: for struct sym tables)
 void exitScope();
 void symtabDestroy(struct symtab *symtab);
-union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name);
+union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name, bool singleScope);
 bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace);
 bool structMembEnter(struct symtab *symtab, union symtab_entry entry);
+bool varEnter(struct symtab *symtab, union symtab_entry entry);
 struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union symtab_entry baseEntry, struct LexVal *ident, bool complete);
 
 struct symtab_entry_generic* allocEntry(enum symtab_type type, bool clear);
@@ -190,7 +236,7 @@ void addTypeSpecQual(union symtab_entry entry, struct astnode_hdr *val, enum ent
 void finalizeSpecs(union symtab_entry entry);
 
 void printDecl(struct symtab *symtab, union symtab_entry entry);
-void printStructEnd();
+void printStructEnd(struct astnode_hdr *structHdr);
 //void allocAry(union symtab_entry entry, struct LexVal *val);
 
 
