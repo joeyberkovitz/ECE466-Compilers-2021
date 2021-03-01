@@ -484,6 +484,8 @@ struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union 
     structNode->ident = ident;
     structNode->ns = TAG;
     structNode->container = complete ? symtabCreate(SCOPE_STRUCT, TAB_STRUCT) : NULL;
+    structNode->file = type->file;
+    structNode->line = type->line;
     if(structNode->container != NULL){
         ((struct symtab_struct*)structNode->container)->parentStruct = structNode;
     }
@@ -625,6 +627,8 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
 
     int flag = spec_node->stype;
     if(val->type == NODE_LEX) {
+        entry.generic->file = ((struct LexVal*)val)->file;
+        entry.generic->line = ((struct LexVal*)val)->line;
         switch (((struct LexVal*)val)->sym) {
             case VOID:
                 /* TODO: checks on void */
@@ -730,6 +734,8 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
         }
     }
     else if(val->type == NODE_SYMTAB && ((struct symtab_entry_generic*)val)->st_type == ENTRY_STAG){
+        entry.generic->file = ((struct symtab_entry_generic*)val)->file;
+        entry.generic->line = ((struct symtab_entry_generic*)val)->line;
         //Variable is of type struct, need to store pointer to struct in curr declaration for use with variable type
         addTypeNode((int*)&spec_node->stype, spec_node->type_specs, val, struct_type);
     }
@@ -894,19 +900,27 @@ void printDecl(struct symtab *symtab, union symtab_entry entry){
 
     if(isTag){
         //Don't print incomplete forward definitions
+        char *structName;
+        char *fileName = entry.generic->file;
+        int line = entry.generic->line;
+        if(entry.tag->ident == NULL)
+            structName = "(anonymous)";
+        else
+            structName = entry.tag->ident->value.string_val;
+
         if(entry.tag->complete){
             printf("struct %s definition at %s:%d{\n",
-                   entry.tag->ident->value.string_val, entry.tag->ident->file, entry.tag->ident->line);
+                   structName, fileName, line);
         }
         else{
             printf("struct %s definition at %s:%d (incomplete)\n",
-                   entry.tag->ident->value.string_val, entry.tag->ident->file, entry.tag->ident->line);
+                   structName, fileName, line);
         }
         return;
     }
 
     printf("%s is defined at %s:%d [in %s scope] as a \n", entry.generic->ident->value.string_val,
-           entry.generic->ident->file, entry.generic->ident->line, scope);
+           entry.generic->file, entry.generic->line, scope);
     if(isMemb) {
         char *structName;
         if (symtab->tabType != TAB_STRUCT) {
@@ -916,7 +930,7 @@ void printDecl(struct symtab *symtab, union symtab_entry entry){
         else if (((struct symtab_struct*)symtab)->parentStruct->ident != NULL)
             structName = ((struct symtab_struct*)symtab)->parentStruct->ident->value.string_val;
         else
-            structName = "anonymous";
+            structName = "(anonymous)";
 
         printf("field of struct %s  off=%zu bit_off=%d bit_wid=%d, type:\n  ",
                structName, entry.memb->structOffset, entry.memb->bitOffset, entry.memb->bitWidth
@@ -987,22 +1001,32 @@ void printDecl(struct symtab *symtab, union symtab_entry entry){
         if (hasFlag(sflags, complex_type))
             printf(" _Complex");
         if (hasFlag(sflags, struct_type)){
-            //TODO: this assumption could likely fail, should be more careful here
-            char *structName;
-            if(((struct astnode_tag*)spec_node->type_specs->els[0])->ident == NULL)
-                structName = "anonymous";
+            char *structName, *structFile;
+            int line = 0;
+            struct astnode_tag *tagNode = ((struct astnode_tag*)spec_node->type_specs->els[0]);
+            if(tagNode->ident == NULL)
+                structName = "(anonymous)";
             else
-                structName = ((struct astnode_tag*)spec_node->type_specs->els[0])->ident->value.string_val;
+                structName = tagNode->ident->value.string_val;
 
             printf("struct %s ", structName);
 
-            struct astnode_tag *structDef = symtabLookup(symtab, TAG, structName, false).tag;
+            struct astnode_tag *structDef = NULL;
+            if(tagNode->ident == NULL) {
+                if(tagNode->complete)
+                    structDef = ((struct symtab_struct*)tagNode->container)->parentStruct;
+                else
+                    fprintf(stderr, "Error: anonymous struct incomplete");
+            }
+            else
+                structDef = symtabLookup(symtab, TAG, structName, false).tag;
+
             if(structDef == NULL)
                 printf("(incomplete)");
             else if(!structDef->complete) //TODO: remove this to agree with Professor's output
-                printf("(incomplete defined at %s:%d)", structDef->ident->file, structDef->ident->line);
+                printf("(incomplete defined at %s:%d)", structDef->file, structDef->line);
             else
-                printf("(defined at %s:%d)", structDef->ident->file, structDef->ident->line);
+                printf("(defined at %s:%d)", structDef->file, structDef->line);
             //TODO: lookup struct in curr table and print incomplete/location defined
         }
     }
@@ -1035,4 +1059,12 @@ void printStruct(struct astnode_hdr *structHdr){
     }
 
     printf("} (size==%zu)\n", getStructSize(structNode));
+}
+
+void finalizeStruct(struct astnode_hdr *structHdr){
+    struct astnode_tag *structNode = (struct astnode_tag*)structHdr;
+    currDecl.generic->stgclass = structNode->stgclass;
+    currDecl.generic->storageNode = structNode->storageNode;
+    currDecl.generic->type_spec->qtype = structNode->type_spec->qtype;
+    currDecl.generic->type_spec->type_quals = structNode->type_spec->type_quals;
 }

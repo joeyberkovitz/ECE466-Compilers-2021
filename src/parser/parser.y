@@ -394,12 +394,12 @@ type-specifier:
     /* 6.7.2.1 - Struct/union specifiers */
 struct-or-union-specifier:
         struct-or-union '{'
-                <hdr>{$$=genStruct($1, currTab, currDecl, (struct LexVal*)NULL, true);}
-                struct-declaration-list '}'              {$$ = $3; printStruct($3); exitScope();}
+                {$<hdr>$=genStruct($1, currTab, currDecl, (struct LexVal*)NULL, true);}
+                struct-declaration-list '}'              {$<hdr>$ = $<hdr>3; printStruct($$); finalizeStruct($$); exitScope();}
     |   struct-or-union IDENT '{'
-                <hdr>{$$=genStruct($1, currTab, currDecl, $2, true);}
-                struct-declaration-list '}'              {$$ = $4; printStruct($4); exitScope();}
-    |   struct-or-union IDENT                            {$$=genStruct($1, currTab, currDecl, $2, false);}
+                {$<hdr>$=genStruct($1, currTab, currDecl, $2, true);}
+                struct-declaration-list '}'              {$<hdr>$ = $<hdr>4; printStruct($$); finalizeStruct($$); exitScope();}
+    |   struct-or-union IDENT                            {$$=genStruct($1, currTab, currDecl, $2, false); finalizeStruct($$);}
     ;
 
 struct-or-union:

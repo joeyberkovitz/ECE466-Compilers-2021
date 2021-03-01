@@ -99,6 +99,8 @@ struct symtab_entry_generic {
     union symtab_entry next;
     enum symtab_ns ns;
     struct LexVal *ident;
+    char *file;
+    int line;
 
     //Specifiers
     enum storage_class stgclass;
@@ -110,34 +112,14 @@ struct symtab_entry_generic {
 };
 
 struct astnode_var {
-    //Generic values:
-    enum node_type type;
-    struct astnode_spec_inter *parent, *child;
-    enum symtab_type st_type;
-    union symtab_entry prev;
-    union symtab_entry next;
-    enum symtab_ns ns;
-    struct LexVal *ident;
-    enum storage_class stgclass;
-    struct LexVal *storageNode;
-    struct astnode_typespec *type_spec;
+    struct symtab_entry_generic;
 
     //Variable specific values:
     long long offset; //Stack frame offset for auto storage
 };
 
 struct astnode_memb {
-    //Generic values:
-    enum node_type type;
-    struct astnode_spec_inter *parent, *child;
-    enum symtab_type st_type;
-    union symtab_entry prev;
-    union symtab_entry next;
-    enum symtab_ns ns;
-    struct LexVal *ident;
-    enum storage_class stgclass;
-    struct LexVal *storageNode;
-    struct astnode_typespec *type_spec;
+    struct symtab_entry_generic;
 
     //Struct/Union member specific attributes
     size_t structOffset;
@@ -147,33 +129,16 @@ struct astnode_memb {
 };
 
 struct astnode_fncndec {
-    enum node_type type;
-    struct astnode_spec_inter *parent, *child;
-    enum symtab_type st_type;
-    union symtab_entry prev;
-    union symtab_entry next;
-    enum symtab_ns ns;
-    struct LexVal *ident;
-    enum storage_class stgclass;
-    struct LexVal *storageNode;
-    struct astnode_typespec *type_spec;
+    struct symtab_entry_generic;
 
     bool unknown;
     struct symtab *scope;
 };
 
 struct astnode_tag {
-    enum node_type type;
-    struct astnode_spec_inter *parent, *child;
-    enum symtab_type st_type;
-    union symtab_entry prev;
-    union symtab_entry next;
-    enum symtab_ns ns;
-    struct LexVal *ident;
-    enum storage_class stgclass;
-    struct LexVal *storageNode;
-    struct astnode_typespec *type_spec;
+    struct symtab_entry_generic;
 
+    //Struct specific info:
     bool complete;
     struct symtab *container;
 };
@@ -258,6 +223,7 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val);
 void addTypeQual(enum qual_flag *qtype, struct astnode_lst *qual_types, struct LexVal *val, bool ptr);
 
 void finalizeSpecs(union symtab_entry entry);
+void finalizeStruct(struct astnode_hdr *structHdr);
 
 struct astnode_ptr* allocPtr();
 struct astnode_spec_inter* setPtr(struct astnode_spec_inter *ptr, struct astnode_spec_inter *next, union symtab_entry entry);

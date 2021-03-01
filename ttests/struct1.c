@@ -17,7 +17,7 @@ struct str3 {
 
 struct str4 {
 	struct str3 *p3;
-	struct str1 str1[10];
+	//struct str1 str1[10];
 	int i;
 } s4;
 
@@ -26,7 +26,7 @@ struct {
 } s5;
 
 
-struct str6 {
+/* struct str6 {
 	int a;
 	unsigned b:2;
 	unsigned c:5;
@@ -37,5 +37,5 @@ struct str6 {
 union u1 {
 	struct str4 str4;
 	struct str3 str3;
-} u1;
+} u1;*/
 
