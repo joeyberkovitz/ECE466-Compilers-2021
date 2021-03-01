@@ -246,34 +246,55 @@ size_t computeSizeof(struct astnode_hdr* el){
                 case ENTRY_VAR:
                 case ENTRY_SMEM:
                 case ENTRY_UMEM:
-                    //If first child is PTR, then don't care about anything else - size is PTR
-                    if(elUnion.symEntry->child != NULL && elUnion.symEntry->child->type == NODE_PTR)
-                        return sizeof (long);
-
+                    ;
                     //TODO: unions not properly handled and not planned
-                    if(elUnion.symEntry->type_spec == NULL) {
-                        fprintf(stderr, "Error: sizeof called without any type specifiers\n");
-                        return 0;
+                    long multiplier = 1;
+                    struct astnode_spec_inter *node = elUnion.symEntry->child;
+                    while(node != NULL && node->type == NODE_ARY){
+                        multiplier *= ((struct astnode_ary*)node)->length;
+                        node = node->child;
                     }
-                    if(elUnion.symEntry->type_spec->type != NODE_TYPESPEC){
-                        //TODO: this might not be an error
+
+                    //If first child is PTR, then don't care about anything else - size is PTR
+                    if(node == NULL){
+                        fprintf(stderr, "unknown error occured");
+                        exit(-1);
+                    }
+
+                    if(node != NULL && node->type == NODE_PTR)
+                        return multiplier*sizeof(long);
+
+                    if(node->type != NODE_TYPESPEC){
                         fprintf(stderr, "Error: sizeof called, but typespec node isn't of type NODE_TYPESPEC\n");
                         return 0;
                     }
-                    struct astnode_typespec *specNode = (struct astnode_typespec *)elUnion.symEntry->type_spec;
-                    if(hasFlag(specNode->stype, char_type) || hasFlag(specNode->stype, bool_type))
-                        return 1;
-                    else if(hasFlag(specNode->stype, sint_type) || hasFlag(specNode->stype, int_type) ||
-                            hasFlag(specNode->stype, lint_type) || hasFlag(specNode->stype, llint_type))
-                        return sizeof(long long);
-                    else if(hasFlag(specNode->stype, complex_type))
-                        return sizeof(long double)*2;
-                    else if(hasFlag(specNode->stype, float_type) || hasFlag(specNode->stype, double_type) ||
-                            hasFlag(specNode->stype, ldouble_type))
-                        return sizeof(long double);
+                    struct astnode_typespec *specNode = (struct astnode_typespec *)node;
+                    if(hasFlag(specNode->stype, char_type))
+                        return multiplier*sizeof(char);
+                    else if(hasFlag(specNode->stype, sint_type))
+                        return multiplier*sizeof(short);
+                    else if(specNode->stype == int_type || specNode->stype == (int_type | signed_type) || specNode->stype == (int_type | unsigned_type))
+                        return multiplier*sizeof(int);
+                    else if(hasFlag(specNode->stype, lint_type) && !hasFlag(specNode->stype, double_type))
+                        return multiplier*sizeof(long);
+                    else if(hasFlag(specNode->stype, llint_type))
+                        return multiplier*sizeof(long long);
+                    else if(hasFlag(specNode->stype, float_type))
+                        return multiplier*sizeof(float);
+                    else if(specNode->stype == double_type)
+                        return multiplier*sizeof(double);
+                    else if(specNode->stype == ldouble_type)
+                        return multiplier*sizeof(long double);
+                    else if(hasFlag(specNode->stype, bool_type))
+                        return multiplier*sizeof(_Bool);
+                    else if(hasFlag(specNode->stype, fcomplex_type))
+                        return multiplier*sizeof(float _Complex);
+                    else if(hasFlag(specNode->stype, dcomplex_type))
+                        return multiplier*sizeof(double _Complex);
+                    else if(hasFlag(specNode->stype, ldcomplex_type))
+                        return multiplier*sizeof(long double _Complex);
                     else if(hasFlag(specNode->stype, struct_type))
-                        //TODO: it may be wrong to assume that if struct_type is present, struct is only type_spec
-                        return getStructSize((struct astnode_tag*)specNode->type_specs->els[0]);
+                        return multiplier*getStructSize((struct astnode_tag*)specNode->type_specs->els[0]);
                     break;
                 case ENTRY_STAG:
                 case ENTRY_UTAG:
@@ -737,6 +758,10 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
         entry.generic->file = ((struct symtab_entry_generic*)val)->file;
         entry.generic->line = ((struct symtab_entry_generic*)val)->line;
         //Variable is of type struct, need to store pointer to struct in curr declaration for use with variable type
+        if(flag != 0){
+            fprintf(stderr, "invalid type specifier");
+            exit(-1);
+        }
         addTypeNode((int*)&spec_node->stype, spec_node->type_specs, val, struct_type);
     }
 }
@@ -912,10 +937,10 @@ void printDecl(struct symtab *symtab, union symtab_entry entry){
             printf("struct %s definition at %s:%d{\n",
                    structName, fileName, line);
         }
-        else{
+        /*else{
             printf("struct %s definition at %s:%d (incomplete)\n",
                    structName, fileName, line);
-        }
+        }*/
         return;
     }
 
