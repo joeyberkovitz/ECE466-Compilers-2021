@@ -9,7 +9,8 @@ unsigned int currStrLen = 0;
 
 
 int main(int argc, char *argv[]) {
-	if(argc > 1){
+    setvbuf(stdout, NULL, _IONBF, 0);
+    if(argc > 1){
 		yyin = fopen(argv[1], "r");
 		if(!yyin){
 			fprintf(stderr, "Error: Could not open file %s\n", argv[1]);

@@ -17,7 +17,7 @@ struct str3 {
 
 struct str4 {
 	struct str3 *p3;
-	//struct str1 str1[10];
+	struct str1 str1[10];
 	int i;
 } s4;
 

@@ -439,11 +439,15 @@ bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
     union symtab_entry existingVal = symtabLookup(symtab, new_entry.generic->ns, new_entry.generic->ident->value.string_val, true);
     if(existingVal.generic != NULL){
         if(replace){
-            if(existingVal.generic->next.generic != NULL)
+            if(existingVal.generic->next.generic != NULL) {
                 existingVal.generic->next.generic->prev = new_entry;
+                new_entry.generic->next = existingVal.generic->next;
+            }
 
-            if(existingVal.generic->prev.generic != NULL)
+            if(existingVal.generic->prev.generic != NULL) {
                 existingVal.generic->prev.generic->next = new_entry;
+                new_entry.generic->prev = existingVal.generic->prev;
+            }
             else if(existingVal.generic->prev.generic == NULL)
                 //Edge case: we are replacing the head of the linked list
                 symtab->head = new_entry;
@@ -512,7 +516,11 @@ struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union 
     }
 
     if(ident != NULL) {
-        union symtab_entry existingEntry = symtabLookup(symtab, TAG, ident->value.string_val, true);
+        struct symtab *searchTab = symtab;
+        while(searchTab->scope == SCOPE_STRUCT)
+            searchTab = searchTab->parent;
+
+        union symtab_entry existingEntry = symtabLookup(searchTab, TAG, ident->value.string_val, true);
 
         //Only enter into symtab under two conditions:
         //1. Existing entry not present
@@ -979,7 +987,7 @@ void printDecl(struct symtab *symtab, union symtab_entry entry){
         }
         else if(next->type == NODE_PTR){
             printQual(((struct astnode_ptr*)next)->qtype);
-            printf("pointer to\n  ");
+            printf("pointer to \n  ");
         }
 
         level++;
