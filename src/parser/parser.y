@@ -132,16 +132,16 @@ translation-unit:
     ;
 
 external-declaration:
-       /* function-definition
-    |*/   declaration
+          function-definition
+    |     declaration
     |     statement
     ;
 
     /* 6.9.1 - Function definitions */
     /* TODO: KR style definitions excluded from assg 3 */
-/*function-definition:
-        declaration-specifiers declarator compound-statement
-    ;*/
+function-definition:
+        declaration-specifiers end-declaration-spec declarator compound-statement
+    ;
 
     /* 6.8 - Statements and blocks */
 statement:
@@ -335,8 +335,12 @@ primary-expression:
 
     /* 6.7 - Declarations */
 declaration:
-        declaration-specifiers {finalizeSpecs(currDecl);}  init-declarator-list ';'     {clearEntry(currDecl);}
-    |   declaration-specifiers ';'                          {clearEntry(currDecl);}
+        declaration-specifiers end-declaration-spec  init-declarator-list ';'     {clearEntry(currDecl);}
+    |   declaration-specifiers end-declaration-spec ';'                          {clearEntry(currDecl);}
+    ;
+
+end-declaration-spec:
+    %empty  {finalizeSpecs(currDecl);}
     ;
 
     /* No actions to perform here - set in global */
