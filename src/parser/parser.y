@@ -478,8 +478,8 @@ declarator:
     ;
 
 direct-declarator:
-        IDENT                                                                        {currDecl.generic->ident = $1; $$ = (struct astnode_spec_inter*)currDecl.generic->type_spec->parent;}
-    |   '(' {$<specInter>$ = currDecl.generic->type_spec->parent;} declarator ')'    {$$ = $<specInter>2;}
+        IDENT                                                                        {currDecl.generic->ident = $1; $$ = (struct astnode_spec_inter*)currDecl.generic;}
+    |   '(' declarator {$<specInter>$ = currDecl.generic->type_spec->parent;} ')'    {$$ = $<specInter>3;}
     /* Not per spec, adjusted per assignment 3 */
     |   direct-declarator '[' NUMBER ']'                                             {$$ = allocAry($1, $3, currDecl, currTab);}
     |   direct-declarator '[' ']'                                                    {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab);}
