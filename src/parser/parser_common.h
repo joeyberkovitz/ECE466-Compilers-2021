@@ -27,7 +27,8 @@ size_t getStructSize(struct astnode_tag *structNode);
 
 enum tab_type {
     TAB_GENERIC,
-    TAB_STRUCT
+    TAB_STRUCT,
+    TAB_FUNC
 };
 
 enum symtab_type {
@@ -132,7 +133,9 @@ struct astnode_fncndec {
     struct symtab_entry_generic;
 
     bool unknown;
-    struct symtab *scope;
+    bool varArgs;
+    struct symtab_func *scope;
+    struct astnode_lst *args;
 };
 
 struct astnode_tag {
@@ -189,15 +192,15 @@ struct symtab {
 };
 
 struct symtab_struct {
-    enum tab_type tabType;
-    enum symtab_scope scope;
-    struct symtab *parent;
-    struct symtab **children; //Array of pointers to direct children - dynamically allocated
-    size_t numChildren; //Number of children pointers allocated
-    union symtab_entry head;
-
+    struct symtab;
     //Struct specific els:
     struct astnode_tag *parentStruct;
+};
+
+struct symtab_func {
+    struct symtab;
+    //Struct specific els:
+    struct astnode_fncndec *parentFunc;
 };
 
 size_t getTabSize(enum tab_type tabType);
@@ -208,7 +211,7 @@ void symtabDestroy(struct symtab *symtab);
 union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name, bool singleScope);
 bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace);
 bool structMembEnter(struct symtab *symtab, union symtab_entry entry);
-bool varEnter(struct symtab *symtab, union symtab_entry entry);
+struct astnode_hdr* varEnter(struct symtab *symtab, union symtab_entry entry);
 struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union symtab_entry baseEntry, struct LexVal *ident, bool complete);
 
 struct symtab_entry_generic* allocEntry(enum symtab_type type, bool clear);
@@ -230,7 +233,12 @@ struct astnode_spec_inter* setPtr(struct astnode_spec_inter *ptr, struct astnode
 struct astnode_spec_inter* allocAry(struct astnode_spec_inter *prev, struct LexVal *val, union symtab_entry entry, struct symtab *symtab);
 void freeInterNodes(union symtab_entry entry);
 
+struct astnode_fncndec* startFuncDef(struct symtab *symtab, union symtab_entry baseEntry);
+struct astnode_lst* addFuncArg(struct symtab *symtab, union symtab_entry decl);
+struct astnode_hdr* endFuncDef(struct symtab *symtab);
+
 void printDecl(struct symtab *symtab, union symtab_entry entry);
+void printSpec(struct astnode_typespec *spec_node, struct symtab *symtab);
 void printQual(enum qual_flag qflags);
 void printStruct(struct astnode_hdr *structHdr);
 //void allocAry(union symtab_entry entry, struct LexVal *val);

@@ -353,6 +353,8 @@ size_t getTabSize(enum tab_type tabType){
             return sizeof (struct symtab);
         case TAB_STRUCT:
             return sizeof (struct symtab_struct);
+        case TAB_FUNC:
+            return sizeof (struct symtab_func);
         default:
             fprintf(stderr, "Error: getTabSize called with unknown tabType %d\n", tabType);
             return 0;
@@ -432,7 +434,8 @@ bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
     if(symtab->scope == SCOPE_STRUCT && entry.generic->ns != MEMBER)
         return symtabEnter(symtab->parent, entry, replace);
 
-    union symtab_entry new_entry = (union symtab_entry)copyEntry(entry);
+    //union symtab_entry new_entry = (union symtab_entry)copyEntry(entry);
+    union symtab_entry new_entry = entry;
     if(new_entry.generic->stgclass == -1 && symtab->scope != SCOPE_PROTO)
         handleStgDefaults(new_entry, symtab);
 
@@ -468,10 +471,14 @@ bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
 
     success:
 
+    //TODO: freeInterNodes eliminates pointer after printing which makes it impossible to determine that pointer was present
+    //freeInterNodes(entry);
+
     //Struct/union members will have printing occur later
-    if(entry.generic->ns != TAG && entry.generic->ns != MEMBER)
+    //Function prototype will be printed at end of prototype
+    if(entry.generic->ns != TAG && entry.generic->ns != MEMBER && symtab->scope != SCOPE_PROTO
+                                                                            && entry.generic->st_type != ENTRY_FNCN)
         printDecl(symtab, new_entry);
-    freeInterNodes(entry);
     return true;
 }
 
@@ -491,12 +498,18 @@ bool structMembEnter(struct symtab *symtab, union symtab_entry entry){
     return symtabEnter(symtab, (union symtab_entry)membNode, false);
 }
 
-bool varEnter(struct symtab *symtab, union symtab_entry entry){
-    //TODO: if var has additional values to generic, need to allocate and memcpy over
-    entry.generic->type = NODE_SYMTAB;
-    entry.generic->st_type=ENTRY_VAR;
-    entry.generic->ns=OTHER;
-    return symtabEnter(symtab, entry, false);
+struct astnode_hdr* varEnter(struct symtab *symtab, union symtab_entry entry){
+    if(entry.generic->st_type == ENTRY_FNCN){
+        return endFuncDef(symtab);
+    }
+    struct astnode_var *varNode = (struct astnode_var*)allocEntry(ENTRY_VAR, false);
+    memcpy(varNode, entry.generic, sizeof(struct symtab_entry_generic));
+    varNode->type = NODE_SYMTAB;
+    varNode->st_type=ENTRY_VAR;
+    varNode->ns=OTHER;
+    symtabEnter(symtab, (union symtab_entry)varNode, false);
+
+    return (struct astnode_hdr *) varNode;
 }
 
 struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union symtab_entry baseEntry, struct LexVal *ident, bool complete){
@@ -662,7 +675,7 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
             case VOID:
                 /* TODO: checks on void */
                 if (flag != 0) {
-                    fprintf(stderr, "invalid type specifier");
+                    fprintf(stderr, "invalid type specifier: VOID");
                     exit(-1);
                 }
                 addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, void_type);
@@ -671,7 +684,7 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
                 if (flag == 0 || flag == signed_type || flag == unsigned_type)
                     addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, char_type);
                 else {
-                    fprintf(stderr, "invalid type specifier");
+                    fprintf(stderr, "invalid type specifier: CHAR");
                     exit(-1);
                 }
                 break;
@@ -680,7 +693,7 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
                     flag == (int_type | signed_type) || flag == uint_type)
                     addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, sint_type);
                 else {
-                    fprintf(stderr, "invalid type specifier");
+                    fprintf(stderr, "invalid type specifier: SHORT");
                     exit(-1);
                 }
                 break;
@@ -691,7 +704,7 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
                     flag == (llint_type | signed_type) || flag == ullint_type)
                     addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, int_type);
                 else {
-                    fprintf(stderr, "invalid type specifier");
+                    fprintf(stderr, "invalid type specifier: INT");
                     exit(-1);
                 }
                 break;
@@ -706,7 +719,7 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
                     spec_node->stype &= ~lint_type;
                     addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, llint_type);
                 } else {
-                    fprintf(stderr, "invalid type specifier");
+                    fprintf(stderr, "invalid type specifier: LONG");
                     exit(-1);
                 }
                 break;
@@ -714,7 +727,7 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
                 if (flag == 0 || flag == complex_type)
                     addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, float_type);
                 else {
-                    fprintf(stderr, "invalid type specifier");
+                    fprintf(stderr, "invalid type specifier: FLOAT");
                     exit(-1);
                 }
                 break;
@@ -722,7 +735,7 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
                 if (flag == 0 || flag == lint_type || flag == complex_type || flag == (complex_type | lint_type))
                     addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, double_type);
                 else {
-                    fprintf(stderr, "invalid type specifier");
+                    fprintf(stderr, "invalid type specifier: DOUBLE");
                     exit(-1);
                 }
                 break;
@@ -732,7 +745,7 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
                     flag == (llint_type | int_type))
                     addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, signed_type);
                 else {
-                    fprintf(stderr, "invalid type specifier");
+                    fprintf(stderr, "invalid type specifier: SIGNED");
                     exit(-1);
                 }
                 break;
@@ -742,13 +755,13 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
                     flag == (llint_type | int_type))
                     addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, unsigned_type);
                 else {
-                    fprintf(stderr, "invalid type specifier");
+                    fprintf(stderr, "invalid type specifier: UNSIGNED");
                     exit(-1);
                 }
                 break;
             case _BOOL:
                 if (flag != 0) {
-                    fprintf(stderr, "invalid type specifier");
+                    fprintf(stderr, "invalid type specifier: _BOOL");
                     exit(-1);
                 }
                 addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, bool_type);
@@ -757,7 +770,7 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
                 if (flag == 0 || flag == float_type || hasFlag(flag, double_type) || flag == lint_type)
                     addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, complex_type);
                 else {
-                    fprintf(stderr, "invalid type specifier");
+                    fprintf(stderr, "invalid type specifier: _COMPLEX");
                     exit(-1);
                 }
         }
@@ -807,6 +820,80 @@ void finalizeSpecs(union symtab_entry entry){
         fprintf(stderr, "complex must have a further real specifier");
         exit(-1);
     }
+}
+
+struct astnode_fncndec* startFuncDef(struct symtab *symtab, union symtab_entry baseEntry){
+    struct astnode_spec_inter *prev = baseEntry.generic->type_spec->parent;
+
+    if((struct symtab_entry_generic*)prev == baseEntry.generic){
+        //Good state - maybe nothing to do here
+    }
+    else if(prev->type == NODE_PTR){
+        //TODO: adjust currDecl as needed to indicate presence of pointer
+        printf("Handling pointer to function\n");
+    }
+    else {
+        //TODO: improve error handling
+        printf("Error: can't allocate function with non-pointer parent\n");
+        return NULL;
+    }
+
+    struct astnode_fncndec *fncndec = (struct astnode_fncndec *) allocEntry(ENTRY_FNCN, false);
+    memcpy(fncndec, baseEntry.generic, sizeof(struct symtab_entry_generic));
+
+    fncndec->type = NODE_SYMTAB;
+    fncndec->st_type = ENTRY_FNCN;
+    fncndec->unknown = true;
+    fncndec->varArgs = false;
+    fncndec->ns = OTHER;
+    fncndec->scope = (struct symtab_func*)symtabCreate(SCOPE_PROTO, TAB_FUNC);
+    fncndec->scope->parentFunc = fncndec;
+
+    symtabEnter(symtab, (union symtab_entry)fncndec, false);
+
+    //Clear base entry for use with params
+    clearEntry(baseEntry);
+
+    return fncndec;
+}
+
+struct astnode_lst* addFuncArg(struct symtab *symtab, union symtab_entry decl){
+    if (symtab->tabType != TAB_FUNC){
+        fprintf(stderr, "Error: attempting to add function argument to non-function symtab\n");
+        return NULL;
+    }
+
+    struct astnode_var *enterNode = (struct astnode_var*)allocEntry(ENTRY_VAR, false);
+    memcpy(enterNode, decl.generic, sizeof(struct symtab_entry_generic));
+
+    struct symtab_func *funcTab = (struct symtab_func*)symtab;
+    struct astnode_fncndec *parentFunc = funcTab->parentFunc;
+
+    struct astnode_lst *retList = parentFunc->args;
+    if(retList == NULL){
+        retList = allocList((struct astnode_hdr *) enterNode);
+        parentFunc->args = retList;
+    }
+    else{
+        addToList(retList, (struct astnode_hdr *) enterNode);
+    }
+
+    //TODO: verify validity of args
+    if(decl.generic->ident != NULL)
+        symtabEnter(symtab, (union symtab_entry)enterNode, false);
+
+    clearEntry(decl);
+    return retList;
+}
+
+struct astnode_hdr* endFuncDef(struct symtab *symtab){
+    struct symtab_func *fncnTab = (struct symtab_func*)symtab;
+    struct astnode_fncndec *fncnNode = fncnTab->parentFunc;
+    exitScope();
+
+    printDecl(symtab, (union symtab_entry)fncnNode);
+
+    return (struct astnode_hdr*)fncnNode;
 }
 
 struct astnode_ptr* allocPtr(){
@@ -915,10 +1002,13 @@ void printDecl(struct symtab *symtab, union symtab_entry entry){
             break;
     }
 
-    bool isTag = false, isMemb=false;
+    bool isTag = false, isMemb = false, isFunc = false;
     switch (entry.generic->ns) {
         case OTHER:
-            usage = "variable";
+            if(entry.generic->st_type == ENTRY_FNCN)
+                isFunc = true;
+            else
+                usage = "variable";
             break;
         case TAG:
             isTag = true;
@@ -969,6 +1059,8 @@ void printDecl(struct symtab *symtab, union symtab_entry entry){
                structName, entry.memb->structOffset, entry.memb->bitOffset, entry.memb->bitWidth
         );
     }
+    else if(isFunc)
+        printf("%s   function returning:\n   ", storage);
     else
         printf("%s with stgclass %s  of type:\n  ", usage, storage);
 
@@ -999,72 +1091,92 @@ void printDecl(struct symtab *symtab, union symtab_entry entry){
 
     struct astnode_typespec *spec_node = entry.generic->type_spec;
     if(spec_node != NULL) {
-        printQual(spec_node->qtype);
-
-        enum type_flag sflags = spec_node->stype;
-        if(hasFlag(sflags,signed_type))
-            printf("signed ");
-        if(hasFlag(sflags,unsigned_type))
-            printf("unsigned ");
-
-        if(hasFlag(sflags,char_type))
-            printf("char");
-        if(hasFlag(sflags,sint_type))
-            printf("short");
-        if(hasFlag(sflags,lint_type))
-            printf("long");
-        if(hasFlag(sflags,llint_type))
-            printf("long long");
-        if(hasFlag(sflags,int_type)){
-            if((sflags & ~uint_type & ~signed_type) != 0)
-                printf(" ");
-            printf("int");
-        }
-
-        if(hasFlag(sflags,float_type))
-            printf("float");
-        if(hasFlag(sflags,double_type)){
-            if(hasFlag(sflags,lint_type))
-                printf(" ");
-            printf("double");
-        }
-
-        if (hasFlag(sflags, bool_type))
-            printf("_Bool");
-        if (hasFlag(sflags, complex_type))
-            printf(" _Complex");
-        if (hasFlag(sflags, struct_type)){
-            char *structName, *structFile;
-            int line = 0;
-            struct astnode_tag *tagNode = ((struct astnode_tag*)spec_node->type_specs->els[0]);
-            if(tagNode->ident == NULL)
-                structName = "(anonymous)";
-            else
-                structName = tagNode->ident->value.string_val;
-
-            printf("struct %s ", structName);
-
-            struct astnode_tag *structDef = NULL;
-            if(tagNode->ident == NULL) {
-                if(tagNode->complete)
-                    structDef = ((struct symtab_struct*)tagNode->container)->parentStruct;
-                else
-                    fprintf(stderr, "Error: anonymous struct incomplete");
-            }
-            else
-                structDef = symtabLookup(symtab, TAG, structName, false).tag;
-
-            if(structDef == NULL)
-                printf("(incomplete)");
-            else if(!structDef->complete) //TODO: remove this to agree with Professor's output
-                printf("(incomplete defined at %s:%d)", structDef->file, structDef->line);
-            else
-                printf("(defined at %s:%d)", structDef->file, structDef->line);
-            //TODO: lookup struct in curr table and print incomplete/location defined
-        }
+        printSpec(spec_node, symtab);
+        printf("\n");
     }
 
-    printf("\n");
+    if(isFunc){
+        if(entry.fncn->args == NULL || entry.fncn->args->numVals == 0){
+            printf("  and taking unknown arguments\n");
+        }
+        else {
+            printf("  and taking the following arguments\n");
+            for(int i = 0; i < entry.fncn->args->numVals; i++){
+                //TODO: will this cast be safe?
+                struct symtab_entry_generic *arg = (struct symtab_entry_generic *)entry.fncn->args->els[i];
+                if(arg->type_spec != NULL) {
+                    printSpec(arg->type_spec, symtab);
+                    printf("\n");
+                }
+            }
+        }
+    }
+}
+
+void printSpec(struct astnode_typespec *spec_node, struct symtab *symtab){
+    printQual(spec_node->qtype);
+
+    enum type_flag sflags = spec_node->stype;
+    if(hasFlag(sflags,signed_type))
+        printf("signed ");
+    if(hasFlag(sflags,unsigned_type))
+        printf("unsigned ");
+
+    if(hasFlag(sflags,char_type))
+        printf("char");
+    if(hasFlag(sflags,sint_type))
+        printf("short");
+    if(hasFlag(sflags,lint_type))
+        printf("long");
+    if(hasFlag(sflags,llint_type))
+        printf("long long");
+    if(hasFlag(sflags,int_type)){
+        if((sflags & ~uint_type & ~signed_type) != 0)
+            printf(" ");
+        printf("int");
+    }
+
+    if(hasFlag(sflags,float_type))
+        printf("float");
+    if(hasFlag(sflags,double_type)){
+        if(hasFlag(sflags,lint_type))
+            printf(" ");
+        printf("double");
+    }
+
+    if (hasFlag(sflags, bool_type))
+        printf("_Bool");
+    if (hasFlag(sflags, complex_type))
+        printf(" _Complex");
+    if (hasFlag(sflags, struct_type)){
+        char *structName, *structFile;
+        int line = 0;
+        struct astnode_tag *tagNode = ((struct astnode_tag*)spec_node->type_specs->els[0]);
+        if(tagNode->ident == NULL)
+            structName = "(anonymous)";
+        else
+            structName = tagNode->ident->value.string_val;
+
+        printf("struct %s ", structName);
+
+        struct astnode_tag *structDef = NULL;
+        if(tagNode->ident == NULL) {
+            if(tagNode->complete)
+                structDef = ((struct symtab_struct*)tagNode->container)->parentStruct;
+            else
+                fprintf(stderr, "Error: anonymous struct incomplete");
+        }
+        else
+            structDef = symtabLookup(symtab, TAG, structName, false).tag;
+
+        if(structDef == NULL)
+            printf("(incomplete)");
+        else if(!structDef->complete) //TODO: remove this to agree with Professor's output
+            printf("(incomplete defined at %s:%d)", structDef->file, structDef->line);
+        else
+            printf("(defined at %s:%d)", structDef->file, structDef->line);
+        //TODO: lookup struct in curr table and print incomplete/location defined
+    }
 }
 
 void printStruct(struct astnode_hdr *structHdr){

@@ -101,10 +101,10 @@
 %type  <specInter> direct-declarator
 %type  <specInter> pointer
 %type  <ptr> type-qualifier-list
-%type  <hdr> parameter-type-list
-%type  <hdr> parameter-list
+%type  <lst> parameter-type-list
+%type  <lst> parameter-list
 %type  <hdr> parameter-declaration
-%type  <hdr> identifier-list
+//%type  <hdr> identifier-list
 %type  <hdr> type-name
 %type  <hdr> abstract-declarator
 %type  <hdr> direct-abstract-declarator
@@ -113,6 +113,7 @@
 %type  <hdr> designation
 %type  <hdr> designator-list
 %type  <hdr> designator
+%type  <fncndec> start-func-subroutine
 
 
 %initial-action {
@@ -336,7 +337,7 @@ primary-expression:
     /* 6.7 - Declarations */
 declaration:
         declaration-specifiers end-declaration-spec  init-declarator-list ';'     {clearEntry(currDecl);}
-    |   declaration-specifiers end-declaration-spec ';'                          {clearEntry(currDecl);}
+    |   declaration-specifiers end-declaration-spec ';'                           {clearEntry(currDecl);}
     ;
 
 end-declaration-spec:
@@ -487,9 +488,15 @@ direct-declarator:
     /* Not per spec, adjusted per assignment 3 */
     |   direct-declarator '[' NUMBER ']'                                             {$$ = allocAry($1, $3, currDecl, currTab);}
     |   direct-declarator '[' ']'                                                    {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab);}
-    |   direct-declarator '(' parameter-type-list ')'
-    |   direct-declarator '(' identifier-list ')'
-    |   direct-declarator '(' ')'
+                                    /* Set st_type to indicate that curr entry was function, should be handled appropriately */
+    |   direct-declarator '(' start-func-subroutine parameter-type-list ')'          {currDecl.generic->st_type = ENTRY_FNCN;}
+    /* K&R style functions ignored per assignment 3
+     * |   direct-declarator '(' start-func-subroutine identifier-list ')'              {currDecl.generic->st_type = ENTRY_FNCN;}*/
+    |   direct-declarator '(' start-func-subroutine ')'                              {currDecl.generic->st_type = ENTRY_FNCN;}
+    ;
+
+start-func-subroutine:
+    %empty  {$$ = startFuncDef(currTab, currDecl);}
     ;
 
 pointer:
@@ -505,13 +512,13 @@ type-qualifier-list:
     ;
 
 parameter-type-list:
-        parameter-list
-    |   parameter-list ',' ELLIPSIS
+        parameter-list                  {$$ = $1;}
+    |   parameter-list ',' ELLIPSIS     {$$ = $1; ((struct symtab_func*)currTab)->parentFunc->varArgs = true;}
     ;
 
 parameter-list:
-        parameter-declaration
-    |   parameter-list ',' parameter-declaration
+        parameter-declaration                       {$$ = addFuncArg(currTab, currDecl);}
+    |   parameter-list ',' parameter-declaration    {$$ = addFuncArg(currTab, currDecl);}
     ;
 
 parameter-declaration:
@@ -520,10 +527,11 @@ parameter-declaration:
     |   declaration-specifiers
     ;
 
+/* K&R style functions ignored per assignment 3
 identifier-list:
         IDENT
     |   identifier-list ',' IDENT
-    ;
+    ; */
 
     /* 6.7.6 - Type names */
 type-name:
