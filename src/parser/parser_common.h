@@ -133,6 +133,7 @@ struct astnode_fncndec {
     struct symtab_entry_generic;
 
     bool unknown;
+    bool none;
     bool varArgs;
     struct symtab_func *scope;
     struct astnode_lst *args;
@@ -214,8 +215,9 @@ void symtabDestroy(struct symtab *symtab);
 union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name, bool singleScope);
 bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace);
 bool structMembEnter(struct symtab *symtab, union symtab_entry entry);
-struct astnode_hdr* symEnter();
+struct astnode_hdr* symCopyAndEnter(bool enter);
 struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union symtab_entry baseEntry, struct LexVal *ident, bool complete);
+void checkVoid();
 void checkStructValidity();
 
 struct symtab_entry_generic* allocEntry(enum symtab_type type, bool clear);
@@ -237,6 +239,8 @@ struct astnode_spec_inter* allocAry(struct astnode_spec_inter *prev, struct LexV
 void freeInterNodes();
 
 struct astnode_fncndec* startFuncDef(bool params);
+struct astnode_lst* startFncnArgs(struct astnode_hdr *arg);
+void addFncnArg(struct astnode_lst *lst, struct astnode_hdr *arg);
 struct astnode_spec_inter* setFncn(struct astnode_fncndec *fncndec, struct astnode_spec_inter *prev);
 struct astnode_fncndec* addFuncArgs(struct astnode_lst *args, struct symtab *symtab, bool varArgs);
 

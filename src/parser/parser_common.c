@@ -476,6 +476,7 @@ bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
 }
 
 bool structMembEnter(struct symtab *symtab, union symtab_entry entry){
+    checkVoid();
     checkStructValidity();
 
     struct astnode_memb *membNode = (struct astnode_memb*)allocEntry(ENTRY_SMEM, false);
@@ -493,10 +494,12 @@ bool structMembEnter(struct symtab *symtab, union symtab_entry entry){
     return symtabEnter(symtab, (union symtab_entry)membNode, false);
 }
 
-struct astnode_hdr* symEnter(){
+struct astnode_hdr* symCopyAndEnter(bool enter){
     // Enter later in structMembEnter
     if(currTab->scope == SCOPE_STRUCT)
         return (struct astnode_hdr*)NULL;
+
+    checkVoid();
 
     if(currTab->scope == SCOPE_PROTO){
         if(currDecl.generic->child->type == NODE_ARY){
@@ -529,10 +532,26 @@ struct astnode_hdr* symEnter(){
         entry = (union symtab_entry)varNode;
     }
 
-    symtabEnter(currTab, entry, false);
+    if(enter)
+        symtabEnter(currTab, entry, false);
+    
     freeInterNodes();
 
     return (struct astnode_hdr*) entry.generic;
+}
+
+void checkVoid(){
+    if(hasFlag(currDecl.generic->type_spec->stype,void_type)){
+        if(currDecl.generic->type_spec->parent->type == NODE_ARY){
+            fprintf(stderr, "declaration of type name of array of voids");
+            exit(-1);
+        }
+
+        if(currDecl.generic->type_spec->parent->type != NODE_PTR && currDecl.generic->type_spec->parent->type != NODE_FNCNDEC && currDecl.generic->ident != NULL){
+            fprintf(stderr, "variable or field declared void");
+            exit(-1);
+        }
+    }
 }
 
 void checkStructValidity(){
@@ -660,6 +679,7 @@ void setStgSpec(union symtab_entry entry, struct symtab *symtab, struct LexVal *
             exit(-1);
         }
 
+        // TODO: ensure register is ignored if func decl
         if(symtab->scope == SCOPE_PROTO && val->sym != REGISTER){
             fprintf(stderr, "only register in parameters");
             exit(-1);
@@ -861,13 +881,36 @@ struct astnode_fncndec* startFuncDef(bool params){
     struct astnode_fncndec *fncndec = (struct astnode_fncndec *) allocEntry(ENTRY_FNCN, false);
     
     fncndec->type = NODE_FNCNDEC;
+    fncndec->unknown = true;
+    fncndec->none = false;
     if(params){
         fncndec->scope = (struct symtab_func*)symtabCreate(SCOPE_PROTO, TAB_FUNC);
         fncndec->scope->parentFunc = fncndec;
         currDecl.generic = allocEntry(ENTRY_GENERIC, true);
-    }    
-    
+    }
+
     return fncndec;
+}
+
+struct astnode_lst* startFncnArgs(struct astnode_hdr *arg){
+    struct symtab_entry_generic *entry = (struct symtab_entry_generic*)arg;
+    if(entry->child == (struct astnode_spec_inter*)entry->type_spec && hasFlag(entry->type_spec->stype,void_type))
+        ((struct symtab_func*)currTab)->parentFunc->none = true;
+
+    clearEntry(currDecl);
+
+    return allocList(arg);
+}
+
+void addFncnArg(struct astnode_lst *lst, struct astnode_hdr *arg){
+    struct symtab_entry_generic *entry = (struct symtab_entry_generic*)arg;
+    if(entry->child == (struct astnode_spec_inter*)entry->type_spec && hasFlag(entry->type_spec->stype,void_type)){
+        fprintf(stderr, "void must be the only parameter");
+        exit(-1);
+    }
+
+    clearEntry(currDecl);
+    addToList(lst, arg);
 }
 
 struct astnode_spec_inter* setFncn(struct astnode_fncndec *fncndec, struct astnode_spec_inter *prev){
@@ -1133,6 +1176,9 @@ void printSpec(struct astnode_spec_inter *next, struct astnode_typespec *spec_no
     printQual(spec_node->qtype);
 
     enum type_flag sflags = spec_node->stype;
+    if(hasFlag(sflags,void_type))
+        printf("void");
+
     if(hasFlag(sflags,signed_type))
         printf("signed ");
     if(hasFlag(sflags,unsigned_type))
@@ -1204,7 +1250,10 @@ void printTabs2(bool func, long level){
 }
 
 void printArgs(struct astnode_fncndec *fncn, struct symtab *symtab, bool func, long level){
-    if(fncn->args == NULL || fncn->args->numVals == 0){
+    if(fncn->none){
+        printf("  and taking no arguments\n");
+    }
+    else if(fncn->args == NULL || fncn->args->numVals == 0){
         printf("  and taking unknown arguments\n");
     }
     else {
@@ -1220,7 +1269,7 @@ void printArgs(struct astnode_fncndec *fncn, struct symtab *symtab, bool func, l
 
         for(int i = 0; i < fncn->args->numVals; i++){
             struct symtab_entry_generic *arg = (struct symtab_entry_generic*)fncn->args->els[i];
-            if(arg->child != NULL && arg->type_spec != NULL){
+            if(arg->ident != NULL && arg->child != NULL && arg->type_spec != NULL){
                 printf("\n");
                 printDecl((struct symtab*)fncn->scope, (union symtab_entry)arg, i+1);
             }

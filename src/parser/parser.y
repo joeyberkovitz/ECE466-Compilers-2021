@@ -106,8 +106,7 @@
 %type  <hdr> parameter-declaration
 //%type  <hdr> identifier-list
 %type  <hdr> type-name
-%type  <hdr> abstract-declarator
-%type  <hdr> direct-abstract-declarator
+%type  <specInter> direct-abstract-declarator
 %type  <hdr> initializer
 %type  <hdr> initializer-list
 %type  <hdr> designation
@@ -478,7 +477,7 @@ function-specifier:
 
     /* 6.7.5 - Declarators */
 declarator:
-        sub-declarator {$$ = symEnter();}
+        sub-declarator {$$ = symCopyAndEnter(true);}
     ;
 
 sub-declarator:
@@ -521,15 +520,14 @@ parameter-type-list:
     ;
 
 parameter-list:
-        parameter-declaration                    {$$ = allocList($1);}
-    |   parameter-list ',' parameter-declaration {addToList($1, $3); $$ = $1;}
+        parameter-declaration                    {$$ = startFncnArgs($1);}
+    |   parameter-list ',' parameter-declaration {addFncnArg($1, $3); $$ = $1;}
     ;
 
 parameter-declaration:
-        declaration-specifiers declarator {clearEntry(currDecl); $$ = $2;}
-    /* TODO: not in assignment 3
-    |   declaration-specifiers abstract-declarator
-    |   declaration-specifiers*/
+        declaration-specifiers end-declaration-spec declarator          {$$ = $3;}
+    |   declaration-specifiers end-declaration-spec abstract-declarator {$$ = symCopyAndEnter(false);}
+    |   declaration-specifiers end-declaration-spec                     {$$ = symCopyAndEnter(false);}
     ;
 
 /* K&R style functions ignored per assignment 3
@@ -551,17 +549,14 @@ abstract-declarator:
     ;
 
 direct-abstract-declarator:
-        '(' abstract-declarator ')'
-    |   direct-abstract-declarator '[' assignment-expression ']'
-    |   '[' assignment-expression ']'
-    |   direct-abstract-declarator '[' ']'
-    |   '[' ']'
-    |   direct-abstract-declarator '[' '*' ']'
-    |   '[' '*' ']'
-    |   direct-abstract-declarator '(' parameter-type-list ')'
-    |   '(' parameter-type-list ')'
-    |   direct-abstract-declarator '(' ')'
-    |   '(' ')'
+        '(' abstract-declarator ')'                              {$$ = currDecl.generic->type_spec->parent;}
+    /* Not per spec, adjusted per assignment 3 */
+    |   direct-abstract-declarator '[' NUMBER ']'                {$$ = allocAry($1, $3, currDecl, currTab);}
+    |   '[' NUMBER ']'                                           {$$ = allocAry((struct astnode_spec_inter*)currDecl.generic, $2, currDecl, currTab);}
+    |   direct-abstract-declarator '[' ']'                       {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab);}
+    |   '[' ']'                                                  {$$ = allocAry((struct astnode_spec_inter*)currDecl.generic, (struct LexVal*)NULL, currDecl, currTab);}
+    |   direct-abstract-declarator '(' start-func-subroutine ')' {$$ = setFncn($3, $1);}
+    |   '(' start-func-subroutine ')'                            {$$ = setFncn($2, (struct astnode_spec_inter*)currDecl.generic);}
     ;
 
     /*6.7.8 - Initialization */
