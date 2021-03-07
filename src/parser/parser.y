@@ -281,8 +281,8 @@ multiplicative-expression:
 
     /* 6.5.4 - Cast expressions */
 cast-expression:
-        unary-expression    {$$ = $1;}
-        /* TODO: type casts; once we have type-names */
+        unary-expression                  {$$ = $1;}
+    |   '(' type-name ')' {$<castNode>$ = allocCast();} cast-expression {$<castNode>4->opand = $5; $$ = (struct astnode_hdr*)$<castNode>4;}
     ;
 
     /* 6.5.3 - Unary expressions */
@@ -492,7 +492,6 @@ direct-declarator:
     /* Not per spec, adjusted per assignment 3 */
     |   direct-declarator '[' NUMBER ']'                {$$ = allocAry($1, $3, currDecl, currTab);}
     |   direct-declarator '[' ']'                       {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab);}
-    /* Set st_type to indicate that curr entry was function, should be handled appropriately */
     |   direct-declarator '(' start-func-subroutine ')' {$$ = setFncn($3, $1);}
     /* K&R style functions ignored per assignment 3
     |   direct-declarator '(' start-func-subroutine identifier-list ')'*/

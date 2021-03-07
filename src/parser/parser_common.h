@@ -17,6 +17,7 @@ struct astnode_hdr*  allocTerop(struct astnode_hdr *first, struct astnode_hdr *s
 
 struct astnode_hdr*  allocPostIncDec(struct LexVal *op, struct astnode_hdr *opand, int opType);
 struct astnode_hdr*  allocSizeof();
+struct astnode_cast*  allocCast();
 struct astnode_hdr*  allocAssignment(struct astnode_hdr *left, struct astnode_hdr *right, struct LexVal *opType);
 
 struct astnode_lst* allocList(struct astnode_hdr *el);
@@ -246,10 +247,10 @@ struct astnode_spec_inter* setFncn(struct astnode_fncndec *fncndec, struct astno
 struct astnode_fncndec* addFuncArgs(struct astnode_lst *args, struct symtab *symtab, bool varArgs);
 
 void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum);
-void printSpec(struct astnode_spec_inter *next, struct astnode_typespec *spec_node, struct symtab *symtab, bool func, long level);
+void printSpec(struct astnode_spec_inter *next, struct symtab *symtab, bool func, long level, long castLevel);
 void printQual(enum qual_flag qflags);
-void printTabs2(bool func, long level);
-void printArgs(struct astnode_fncndec *fncn, struct symtab *symtab, bool func, long level);
+void printTabs2(bool func, long level, long castLevel);
+void printArgs(struct astnode_fncndec *fncn, struct symtab *symtab, bool func, long level, long castLevel);
 void printStruct(struct astnode_hdr *structHdr);
 
 

@@ -117,6 +117,11 @@ void printAst(struct astnode_hdr *hdr, int lvl){
             printf("ELSE:\n");
             printAst(node->terNode->third, lvl + 1);
             break;
+        case NODE_CAST:
+            printf("CAST OP\n  ");
+            printSpec(node->castNode->cast_spec, currTab, false, 0, lvl);
+            printAst(node->castNode->opand, lvl + 1);
+            break;
         case NODE_LST:
             for(int i = 0; i < node->lst->numVals; i++){
                 if(i > 0)
@@ -198,6 +203,22 @@ struct astnode_hdr* allocSizeof(){
     clearEntry(currDecl);
 
     return (struct astnode_hdr*)lexVal;
+}
+
+struct astnode_cast* allocCast(){
+    // TODO: union too
+    if(currDecl.generic->child->type == NODE_FNCNDEC || currDecl.generic->child->type == NODE_ARY || (currDecl.generic->child == (struct astnode_spec_inter*)currDecl.generic->type_spec && hasFlag(currDecl.generic->type_spec->stype,struct_type))){
+        fprintf(stderr, "conversion to non-scalar type requested");
+        exit(-1);
+    }
+
+    struct astnode_cast *cast = mallocSafe(sizeof(struct astnode_cast));
+    cast->type = NODE_CAST;
+    cast->cast_spec = currDecl.generic->child;
+
+    clearEntry(currDecl);
+
+    return cast;
 }
 
 struct astnode_hdr* allocAssignment(struct astnode_hdr *left, struct astnode_hdr *right, struct LexVal *opType){
@@ -1172,20 +1193,19 @@ void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum){
     }
 
     struct astnode_spec_inter *child = entry.generic->child;
-    struct astnode_typespec *spec_node = entry.generic->type_spec;
-    if(child != NULL && spec_node != NULL)
-        printSpec(child, spec_node, symtab, isFunc, 0);
+    if(child != NULL)
+        printSpec(child, symtab, isFunc, 0, 0);
 
     if(isFunc)
-        printArgs(entry.fncn, symtab, true, 0);
+        printArgs(entry.fncn, symtab, true, 0, 0);
 
     if(symtab->scope != SCOPE_STRUCT && symtab->scope != SCOPE_PROTO)
         printf("\n");
 }
 
-void printSpec(struct astnode_spec_inter *next, struct astnode_typespec *spec_node, struct symtab *symtab, bool func, long level){
+void printSpec(struct astnode_spec_inter *next, struct symtab *symtab, bool func, long level, long castLevel){
     /* TODO: iterate over pointers, arrays, functions */
-    printTabs2(func, level);
+    printTabs2(func, level, castLevel);
     if(next->type != NODE_TYPESPEC){    
         if(next->type == NODE_ARY){
             printf("array of  ");
@@ -1195,24 +1215,25 @@ void printSpec(struct astnode_spec_inter *next, struct astnode_typespec *spec_no
                 printf("incomplete");
 
             printf(" elements of type\n  ");
-            printSpec(next->child, spec_node, symtab, func, level+1);
+            printSpec(next->child, symtab, func, level+1, castLevel);
             return;
         }
         else if(next->type == NODE_PTR){
             printQual(((struct astnode_ptr*)next)->qtype);
             printf("pointer to \n  ");
-            printSpec(next->child, spec_node, symtab, func, level+1);
+            printSpec(next->child, symtab, func, level+1, castLevel);
             return;
         }
         else if(next->type == NODE_FNCNDEC){
             printf("function returning\n  ");
-            printSpec(next->child, spec_node, symtab, func, level+1);
-            printTabs2(func, level);
-            printArgs((struct astnode_fncndec*)next, symtab, func, level+1);
+            printSpec(next->child, symtab, func, level+1, castLevel);
+            printTabs2(func, level, castLevel);
+            printArgs((struct astnode_fncndec*)next, symtab, func, level+1, castLevel);
             return;
         }
     }
 
+    struct astnode_typespec *spec_node = (struct astnode_typespec*)next;
     printQual(spec_node->qtype);
 
     enum type_flag sflags = spec_node->stype;
@@ -1281,15 +1302,17 @@ void printSpec(struct astnode_spec_inter *next, struct astnode_typespec *spec_no
     printf("\n");
 }
 
-void printTabs2(bool func, long level){
+void printTabs2(bool func, long level, long castLevel){
     if(func)
         printf(" ");
 
     for(int i = 0; i < level; i++)
         printf(" ");
+
+    printTabs1(castLevel);
 }
 
-void printArgs(struct astnode_fncndec *fncn, struct symtab *symtab, bool func, long level){
+void printArgs(struct astnode_fncndec *fncn, struct symtab *symtab, bool func, long level, long castLevel){
     if(fncn->none){
         printf("  and taking no arguments\n");
     }
@@ -1301,9 +1324,9 @@ void printArgs(struct astnode_fncndec *fncn, struct symtab *symtab, bool func, l
         for(int i = 0; i < fncn->args->numVals; i++){
             //TODO: will this cast be safe?
             struct symtab_entry_generic *arg = (struct symtab_entry_generic *)fncn->args->els[i];
-            if(arg->child != NULL && arg->type_spec != NULL) {
+            if(arg->child != NULL) {
                 printf("  ");
-                printSpec(arg->child, arg->type_spec, symtab, func, level);
+                printSpec(arg->child, symtab, func, level, castLevel);
             }
         }
 
@@ -1321,7 +1344,7 @@ void printStruct(struct astnode_hdr *structHdr){
     if(structHdr->type != NODE_SYMTAB ||
         (((struct symtab_entry_generic*)structHdr)->st_type != ENTRY_STAG
                 && ((struct symtab_entry_generic*)structHdr)->st_type != ENTRY_UTAG)){
-        fprintf(stderr, "Error: printStructEnd called with non-struct node\n");
+        fprintf(stderr, "Error: printStruct called with non-struct node\n");
         return;
     }
 

@@ -19,6 +19,7 @@ enum node_type {
     NODE_UNOP,
     NODE_BINOP,
     NODE_TEROP,
+    NODE_CAST,
     NODE_LST,
     NODE_FNCN,
 
@@ -106,6 +107,12 @@ struct astnode_terop {
     struct astnode_hdr *first, *second, *third;
 };
 
+struct astnode_cast {
+    enum node_type type;
+    struct astnode_spec_inter *cast_spec;
+    struct astnode_hdr *opand;
+};
+
 struct astnode_lst {
     enum node_type type;
     int numVals;
@@ -124,6 +131,7 @@ union astnode {
     struct astnode_unop *unNode;
     struct astnode_binop *binNode;
     struct astnode_terop *terNode;
+    struct astnode_cast *castNode;
     struct astnode_lst *lst;
     struct astnode_fncn *fncn;
 
