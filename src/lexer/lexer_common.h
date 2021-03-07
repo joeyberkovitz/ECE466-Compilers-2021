@@ -25,7 +25,8 @@ enum node_type {
     NODE_SYMTAB, //if present - need to check st_type for more details
     NODE_TYPESPEC,
     NODE_ARY,
-    NODE_PTR
+    NODE_PTR,
+    NODE_FNCNDEC
 };
 
 typedef union {
