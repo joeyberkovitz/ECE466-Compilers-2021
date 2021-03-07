@@ -101,7 +101,7 @@
 %type  <specInter> direct-declarator
 %type  <specInter> pointer
 %type  <ptr> type-qualifier-list
-%type  <lst> parameter-type-list
+%type  <fncndec> parameter-type-list
 %type  <lst> parameter-list
 %type  <hdr> parameter-declaration
 //%type  <hdr> identifier-list
@@ -113,7 +113,7 @@
 %type  <hdr> designation
 %type  <hdr> designator-list
 %type  <hdr> designator
-%type  <specInter> start-func-subroutine
+%type  <fncndec> start-func-subroutine
 
 
 %initial-action {
@@ -478,53 +478,58 @@ function-specifier:
 
     /* 6.7.5 - Declarators */
 declarator:
-        pointer direct-declarator {varEnter(currTab, currDecl);}
-    |   direct-declarator         {varEnter(currTab, currDecl);}
+        sub-declarator {$$ = symEnter();}
+    ;
+
+sub-declarator:
+        pointer direct-declarator
+    |   direct-declarator
     ;
 
 direct-declarator:
-        IDENT                                                                     {currDecl.generic->ident = $1; $$ = (struct astnode_spec_inter*)currDecl.generic;}
-    |   '(' declarator {$<specInter>$ = currDecl.generic->type_spec->parent;} ')' {$$ = $<specInter>3;}
+        IDENT                                           {currDecl.generic->ident = $1; $$ = (struct astnode_spec_inter*)currDecl.generic;}
+    |   '(' sub-declarator ')'                          {$$ = currDecl.generic->type_spec->parent;}
     /* Not per spec, adjusted per assignment 3 */
-    |   direct-declarator '[' NUMBER ']'                                          {$$ = allocAry($1, $3, currDecl, currTab);}
-    |   direct-declarator '[' ']'                                                 {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab);}
-                                    /* Set st_type to indicate that curr entry was function, should be handled appropriately */
-    |   direct-declarator '(' start-func-subroutine parameter-type-list ')'       {currDecl.generic->st_type = ENTRY_FNCN;}
+    |   direct-declarator '[' NUMBER ']'                {$$ = allocAry($1, $3, currDecl, currTab);}
+    |   direct-declarator '[' ']'                       {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab);}
+    /* Set st_type to indicate that curr entry was function, should be handled appropriately */
+    |   direct-declarator '(' start-func-subroutine ')' {$$ = setFncn($3, $1);}
     /* K&R style functions ignored per assignment 3
     |   direct-declarator '(' start-func-subroutine identifier-list ')'*/
-    |   direct-declarator '(' start-func-subroutine ')'                           {currDecl.generic->st_type = ENTRY_FNCN;}
     ;
 
 start-func-subroutine:
-    %empty  {$$ = startFuncDef(currTab, currDecl);}
+        {$<specInter>$ = (struct astnode_spec_inter*)currDecl.generic; startFuncDef(true);} parameter-type-list {free(currDecl.generic); currDecl.generic = (struct symtab_entry_generic*)$<specInter>1; exitScope(); $$ = $2;}
+    |   %empty  {$$ = startFuncDef(false);}
     ;
 
 pointer:
-        '*'                                {$$ = setPtr((struct astnode_spec_inter*)allocPtr(), (struct astnode_spec_inter*)currDecl.generic->type_spec, currDecl);}
-    |   '*' type-qualifier-list            {$$ = setPtr((struct astnode_spec_inter*)$2, (struct astnode_spec_inter*)currDecl.generic->type_spec, currDecl);}
-    |   pointer '*' type-qualifier-list    {$$ = setPtr((struct astnode_spec_inter*)$3, $1, currDecl);}
-    |   pointer '*'                        {$$ = setPtr((struct astnode_spec_inter*)allocPtr(),$1 , currDecl);}
+        '*'                             {$$ = setPtr((struct astnode_spec_inter*)allocPtr(), (struct astnode_spec_inter*)currDecl.generic->type_spec);}
+    |   '*' type-qualifier-list         {$$ = setPtr((struct astnode_spec_inter*)$2, (struct astnode_spec_inter*)currDecl.generic->type_spec);}
+    |   pointer '*' type-qualifier-list {$$ = setPtr((struct astnode_spec_inter*)$3, $1);}
+    |   pointer '*'                     {$$ = setPtr((struct astnode_spec_inter*)allocPtr(), $1);}
     ;
 
 type-qualifier-list:
-        type-qualifier                        {$$ = allocPtr(); addTypeQual(&$$->qtype, $$->type_quals, $1, true);}
-    |   type-qualifier-list type-qualifier    {$$ = $1; addTypeQual(&$$->qtype, $$->type_quals, $2, true);}
+        type-qualifier                     {$$ = allocPtr(); addTypeQual(&$$->qtype, $$->type_quals, $1, true);}
+    |   type-qualifier-list type-qualifier {$$ = $1; addTypeQual(&$$->qtype, $$->type_quals, $2, true);}
     ;
 
 parameter-type-list:
-        parameter-list                  {$$ = $1;}
-    |   parameter-list ',' ELLIPSIS     {$$ = $1; ((struct symtab_func*)currTab)->parentFunc->varArgs = true;}
+        parameter-list              {$$ = addFuncArgs($1, currTab, false);}
+    |   parameter-list ',' ELLIPSIS {$$ = addFuncArgs($1, currTab, true);}
     ;
 
 parameter-list:
-        parameter-declaration                       {$$ = addFuncArg(currTab, currDecl);}
-    |   parameter-list ',' parameter-declaration    {$$ = addFuncArg(currTab, currDecl);}
+        parameter-declaration                    {$$ = allocList($1);}
+    |   parameter-list ',' parameter-declaration {addToList($1, $3); $$ = $1;}
     ;
 
 parameter-declaration:
-        declaration-specifiers declarator
+        declaration-specifiers declarator {clearEntry(currDecl); $$ = $2;}
+    /* TODO: not in assignment 3
     |   declaration-specifiers abstract-declarator
-    |   declaration-specifiers
+    |   declaration-specifiers*/
     ;
 
 /* K&R style functions ignored per assignment 3

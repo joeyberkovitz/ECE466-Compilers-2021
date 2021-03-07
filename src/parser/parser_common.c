@@ -434,26 +434,24 @@ bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
     if(symtab->scope == SCOPE_STRUCT && entry.generic->ns != MEMBER)
         return symtabEnter(symtab->parent, entry, replace);
 
-    //union symtab_entry new_entry = (union symtab_entry)copyEntry(entry);
-    union symtab_entry new_entry = entry;
-    if(new_entry.generic->stgclass == -1 && symtab->scope != SCOPE_PROTO)
-        handleStgDefaults(new_entry, symtab);
+    if(entry.generic->stgclass == -1 && symtab->scope != SCOPE_PROTO)
+        handleStgDefaults(entry, symtab);
 
-    union symtab_entry existingVal = symtabLookup(symtab, new_entry.generic->ns, new_entry.generic->ident->value.string_val, true);
+    union symtab_entry existingVal = symtabLookup(symtab, entry.generic->ns, entry.generic->ident->value.string_val, true);
     if(existingVal.generic != NULL){
         if(replace){
             if(existingVal.generic->next.generic != NULL) {
-                existingVal.generic->next.generic->prev = new_entry;
-                new_entry.generic->next = existingVal.generic->next;
+                existingVal.generic->next.generic->prev = entry;
+                entry.generic->next = existingVal.generic->next;
             }
 
             if(existingVal.generic->prev.generic != NULL) {
-                existingVal.generic->prev.generic->next = new_entry;
-                new_entry.generic->prev = existingVal.generic->prev;
+                existingVal.generic->prev.generic->next = entry;
+                entry.generic->prev = existingVal.generic->prev;
             }
             else if(existingVal.generic->prev.generic == NULL)
                 //Edge case: we are replacing the head of the linked list
-                symtab->head = new_entry;
+                symtab->head = entry;
 
             goto success;
         }
@@ -465,24 +463,21 @@ bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
 
     //Insert element onto beginning of list
     union symtab_entry oldHead = symtab->head;
-    symtab->head = new_entry;
-    new_entry.generic->prev.generic = NULL;
-    new_entry.generic->next = oldHead;
+    symtab->head = entry;
+    entry.generic->prev.generic = NULL;
+    entry.generic->next = oldHead;
 
     success:
-
-    //TODO: freeInterNodes eliminates pointer after printing which makes it impossible to determine that pointer was present
-    //freeInterNodes(entry);
-
     //Struct/union members will have printing occur later
     //Function prototype will be printed at end of prototype
-    if(entry.generic->ns != TAG && entry.generic->ns != MEMBER && symtab->scope != SCOPE_PROTO
-                                                                            && entry.generic->st_type != ENTRY_FNCN)
-        printDecl(symtab, new_entry);
+    if(entry.generic->ns != TAG && entry.generic->ns != MEMBER && symtab->scope != SCOPE_PROTO)
+        printDecl(symtab, entry);
     return true;
 }
 
 bool structMembEnter(struct symtab *symtab, union symtab_entry entry){
+    checkStructValidity();
+
     struct astnode_memb *membNode = (struct astnode_memb*)allocEntry(ENTRY_SMEM, false);
     memcpy(membNode, entry.generic, getEntrySize(entry.generic->st_type));
 
@@ -498,22 +493,85 @@ bool structMembEnter(struct symtab *symtab, union symtab_entry entry){
     return symtabEnter(symtab, (union symtab_entry)membNode, false);
 }
 
-struct symtab_entry_generic* symEnter(struct symtab *symtab, union symtab_entry entry){
-    if(entry.generic->st_type == ENTRY_FNCN){
-        endFuncDef(symtab);
+struct astnode_hdr* symEnter(){
+    // Enter later in structMembEnter
+    if(currTab->scope == SCOPE_STRUCT)
+        return (struct astnode_hdr*)NULL;
+
+    union symtab_entry entry;
+    if(currDecl.generic->child->type == NODE_FNCNDEC){
+        struct astnode_fncndec *fncndec = (struct astnode_fncndec*)currDecl.generic->child;
+        struct astnode_spec_inter *child = fncndec->child;
+        memcpy(fncndec, currDecl.generic, sizeof(struct symtab_entry_generic));
+        fncndec->st_type = ENTRY_FNCN;
+        fncndec->child = child;
+        fncndec->unknown = true;
+        fncndec->ns = OTHER;
+        entry = (union symtab_entry)fncndec;
     }
     else{
+        checkStructValidity();
+        /*// Check struct validity
+        struct astnode_typespec *spec_node = currDecl.generic->type_spec;
+        if (hasFlag(spec_node->stype, struct_type)) {
+            if(spec_node->type_specs->numVals != 1 || spec_node->type_specs->els[0]->type != NODE_SYMTAB || ((struct symtab_entry_generic*)spec_node->type_specs->els[0])->st_type != ENTRY_STAG){
+                fprintf(stderr, "Error: struct type set, but struct not present in type specs\n");
+                exit(EXIT_FAILURE);
+            }
+
+            struct astnode_tag *structNode = (struct astnode_tag*)spec_node->type_specs->els[0];
+            bool structComplete = false;
+            if(!structNode->complete && structNode->ident != NULL){
+                struct astnode_tag *lookupNode = symtabLookup(currTab, TAG, structNode->ident->value.string_val, false).tag;
+                if(lookupNode != NULL && lookupNode->complete)
+                    structComplete = true;
+            }
+            else if(structNode->complete)
+                structComplete = true;
+
+            if(!structComplete && currDecl.generic->type_spec->parent->type != NODE_PTR){
+                fprintf(stderr, "Error: attempt to declare incomplete struct not of type pointer");
+                exit(EXIT_FAILURE);
+            }
+        }*/
+        
         struct astnode_var *varNode = (struct astnode_var*)allocEntry(ENTRY_VAR, false);
-        memcpy(varNode, entry.generic, sizeof(struct symtab_entry_generic);
-        varNode->type = NODE_SYMTAB;
+        memcpy(varNode, currDecl.generic, sizeof(struct symtab_entry_generic));
         varNode->st_type = ENTRY_VAR;
         varNode->ns = OTHER;
         entry = (union symtab_entry)varNode;
     }
 
-    symtabEnter(symtab, entry, false);
+    symtabEnter(currTab, entry, false);
+    freeInterNodes();
 
-    return (struct astnode_hdr *) varNode;
+    return (struct astnode_hdr*) entry.generic;
+}
+
+void checkStructValidity(){
+    // Check struct validity
+    struct astnode_typespec *spec_node = currDecl.generic->type_spec;
+    if (hasFlag(spec_node->stype, struct_type)) {
+        if(spec_node->type_specs->numVals != 1 || spec_node->type_specs->els[0]->type != NODE_SYMTAB || ((struct symtab_entry_generic*)spec_node->type_specs->els[0])->st_type != ENTRY_STAG){
+            fprintf(stderr, "Error: struct type set, but struct not present in type specs\n");
+            exit(EXIT_FAILURE);
+        }
+
+        struct astnode_tag *structNode = (struct astnode_tag*)spec_node->type_specs->els[0];
+        bool structComplete = false;
+        if(!structNode->complete && structNode->ident != NULL){
+            struct astnode_tag *lookupNode = symtabLookup(currTab, TAG, structNode->ident->value.string_val, false).tag;
+            if(lookupNode != NULL && lookupNode->complete)
+                structComplete = true;
+        }
+        else if(structNode->complete)
+            structComplete = true;
+
+        if(!structComplete && currDecl.generic->type_spec->parent->type != NODE_PTR){
+            fprintf(stderr, "Error: attempt to declare incomplete struct not of type pointer");
+            exit(EXIT_FAILURE);
+        }
+    }
 }
 
 struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union symtab_entry baseEntry, struct LexVal *ident, bool complete){
@@ -553,7 +611,6 @@ struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union 
 
     return (struct astnode_hdr*)structNode;
 }
-
 
 size_t getEntrySize(enum symtab_type type){
     switch (type) {
@@ -600,26 +657,13 @@ struct symtab_entry_generic* clearEntry(union symtab_entry entry){
     struct astnode_typespec *spec_node = mallocSafe(sizeof(struct astnode_typespec));
     spec_node->type = NODE_TYPESPEC;
     spec_node->parent = (struct astnode_spec_inter*)entry.generic;
-    spec_node->stype = spec_node->qtype = 0;
+    spec_node->numParents = spec_node->stype = spec_node->qtype = 0;
     spec_node->type_specs = allocList((struct astnode_hdr*)NULL);
     spec_node->type_quals = allocList((struct astnode_hdr*)NULL);
     entry.generic->parent = (struct astnode_spec_inter*)NULL;
     entry.generic->child = (struct astnode_spec_inter*)spec_node;
     entry.generic->type_spec = spec_node;
     return entry.generic;
-}
-
-struct symtab_entry_generic* copyEntry(union symtab_entry entry){
-    struct symtab_entry_generic *ret = allocEntry(entry.generic->st_type, false);
-    size_t size = getEntrySize(entry.generic->st_type);
-    memcpy(ret, entry.generic, size);
-    
-    if(entry.generic->st_type == ENTRY_GENERIC){
-        ret->st_type = ENTRY_VAR;
-        ret->ns = OTHER;
-    }
-
-    return ret;
 }
 
 void setStgSpec(union symtab_entry entry, struct symtab *symtab, struct LexVal *val){
@@ -826,76 +870,51 @@ void finalizeSpecs(union symtab_entry entry){
     }
 }
 
-struct astnode_fncndec* startFuncDef(struct symtab *symtab, struct astnode_spec_inter *prev, union symtab_entry entry){
-    if(prev->type != NODE_PTR || prev != (struct astnode_spec_inter*)entry.generic){
-        printf("Error: can't allocate function with non-pointer parent\n");
-        exit(-1);
-    }
-
+struct astnode_fncndec* startFuncDef(bool params){
     struct astnode_fncndec *fncndec = (struct astnode_fncndec *) allocEntry(ENTRY_FNCN, false);
     
-    if(prev->type == NODE_PTR){
-        fncndec->child = prev->child;
-        prev->child->parent = (struct astnode_spec_inter*)fncndec;
-        fncndec->parent = prev;
-        prev->child = (struct astnode_spec_inter*)fncndec;
-    }
-    else {
-        memcpy(fncndec, entry.generic, sizeof(struct symtab_entry_generic));
-        fncndec->type = NODE_SYMTAB;
-        fncndec->st_type = ENTRY_FNCN;
-        fncndec->unknown = true;
-        fncndec->varArgs = false;
-        fncndec->ns = OTHER;
+    fncndec->type = NODE_FNCNDEC;
+    if(params){
         fncndec->scope = (struct symtab_func*)symtabCreate(SCOPE_PROTO, TAB_FUNC);
         fncndec->scope->parentFunc = fncndec;
-
-        symtabEnter(symtab, (union symtab_entry)fncndec, false);
-
-        //Clear base entry for use with params
-        clearEntry(baseEntry);
-    }
-
+        currDecl.generic = allocEntry(ENTRY_GENERIC, true);
+    }    
+    
     return fncndec;
 }
 
-struct astnode_lst* addFuncArg(struct symtab *symtab, union symtab_entry decl){
+struct astnode_spec_inter* setFncn(struct astnode_fncndec *fncndec, struct astnode_spec_inter *prev){
+    if(prev->type == NODE_ARY){
+        fprintf(stderr, "cannot declare an array of functions");
+        exit(-1);
+    }
+    else if(prev->type == NODE_FNCNDEC){
+        fprintf(stderr, "function return type cannot be function");
+        exit(-1);
+    }
+    
+    fncndec->child = prev->child;
+    prev->child->parent = (struct astnode_spec_inter*)fncndec;
+    fncndec->parent = prev;
+    prev->child = (struct astnode_spec_inter*)fncndec;
+    
+    return (struct astnode_spec_inter*)fncndec;
+}
+
+
+struct astnode_fncndec* addFuncArgs(struct astnode_lst *args, struct symtab *symtab, bool varArgs){
     if (symtab->tabType != TAB_FUNC){
-        fprintf(stderr, "Error: attempting to add function argument to non-function symtab\n");
+        fprintf(stderr, "Error: attempting to add function arguments to non-function symtab\n");
         return NULL;
     }
-
-    struct astnode_var *enterNode = (struct astnode_var*)allocEntry(ENTRY_VAR, false);
-    memcpy(enterNode, decl.generic, sizeof(struct symtab_entry_generic));
 
     struct symtab_func *funcTab = (struct symtab_func*)symtab;
     struct astnode_fncndec *parentFunc = funcTab->parentFunc;
 
-    struct astnode_lst *retList = parentFunc->args;
-    if(retList == NULL){
-        retList = allocList((struct astnode_hdr *) enterNode);
-        parentFunc->args = retList;
-    }
-    else{
-        addToList(retList, (struct astnode_hdr *) enterNode);
-    }
+    parentFunc->args = args;
+    parentFunc->varArgs = varArgs;
 
-    //TODO: verify validity of args
-    if(decl.generic->ident != NULL)
-        symtabEnter(symtab, (union symtab_entry)enterNode, false);
-
-    clearEntry(decl);
-    return retList;
-}
-
-struct astnode_hdr* endFuncDef(struct symtab *symtab){
-    struct symtab_func *fncnTab = (struct symtab_func*)symtab;
-    struct astnode_fncndec *fncnNode = fncnTab->parentFunc;
-    exitScope();
-
-    printDecl(symtab, (union symtab_entry)fncnNode);
-
-    return (struct astnode_hdr*)fncnNode;
+    return parentFunc;
 }
 
 struct astnode_ptr* allocPtr(){
@@ -907,7 +926,7 @@ struct astnode_ptr* allocPtr(){
     return ptr;
 }
 
-struct astnode_spec_inter* setPtr(struct astnode_spec_inter *ptr, struct astnode_spec_inter *next, union symtab_entry entry){
+struct astnode_spec_inter* setPtr(struct astnode_spec_inter *ptr, struct astnode_spec_inter *next){
     ptr->parent = next->parent;
     next->parent->child = ptr;
     ptr->child = next;
@@ -917,6 +936,11 @@ struct astnode_spec_inter* setPtr(struct astnode_spec_inter *ptr, struct astnode
 }
 
 struct astnode_spec_inter* allocAry(struct astnode_spec_inter *prev, struct LexVal *val, union symtab_entry entry, struct symtab *symtab){
+    if(prev->type == NODE_FNCNDEC){
+        fprintf(stderr, "function cannot return array");
+        exit(-1);
+    }
+
     if(val == NULL && symtab->scope != SCOPE_PROTO && entry.generic->stgclass != STG_EXTERN && (entry.generic->stgclass != -1 || symtab->scope != SCOPE_FILE)){
         fprintf(stderr, "array size not specified");
         exit(-1);
@@ -956,9 +980,12 @@ struct astnode_spec_inter* allocAry(struct astnode_spec_inter *prev, struct LexV
     return (struct astnode_spec_inter*)ary;
 }
 
-void freeInterNodes(union symtab_entry entry){
-    entry.generic->child = (struct astnode_spec_inter*)entry.generic->type_spec;
-    entry.generic->child->parent = (struct astnode_spec_inter*)entry.generic;
+void freeInterNodes(){
+    currDecl.generic->child = (struct astnode_spec_inter*)currDecl.generic->type_spec;
+    currDecl.generic->type_spec->numParents++;
+    currDecl.generic->type_spec->parents = realloc(currDecl.generic->type_spec->parents, sizeof(struct astnode_spec_inter*) * currDecl.generic->type_spec->numParents);
+    currDecl.generic->type_spec->parents[currDecl.generic->type_spec->numParents-1] = currDecl.generic->type_spec->parent;
+    currDecl.generic->type_spec->parent = (struct astnode_spec_inter*)currDecl.generic;
 }
 
 void printQual(enum qual_flag qflags){
@@ -1062,14 +1089,26 @@ void printDecl(struct symtab *symtab, union symtab_entry entry){
         );
     }
     else if(isFunc)
-        printf("%s   function returning:\n   ", storage);
+        printf("%s   function returning:\n  ", storage);
     else
         printf("%s with stgclass %s  of type:\n  ", usage, storage);
 
+    struct astnode_spec_inter *child = entry.generic->child;
+    struct astnode_typespec *spec_node = entry.generic->type_spec;
+    if(child != NULL && spec_node != NULL)
+        printSpec(child, spec_node, symtab, isFunc, 0);
+
+    if(isFunc)
+        printArgs(entry.fncn, symtab, true, 0);
+
+    if(symtab->scope != SCOPE_STRUCT)
+        printf("\n");
+}
+
+void printSpec(struct astnode_spec_inter *next, struct astnode_typespec *spec_node, struct symtab *symtab, bool func, long level){
     /* TODO: iterate over pointers, arrays, functions */
-    int level = 0;
-    struct astnode_spec_inter *next = entry.generic->child;
-    while(next->type != NODE_TYPESPEC){
+    printTabs2(func, level);
+    if(next->type != NODE_TYPESPEC){    
         if(next->type == NODE_ARY){
             printf("array of  ");
             if(((struct astnode_ary*)next)->complete)
@@ -1078,44 +1117,24 @@ void printDecl(struct symtab *symtab, union symtab_entry entry){
                 printf("incomplete");
 
             printf(" elements of type\n  ");
+            printSpec(next->child, spec_node, symtab, func, level+1);
+            return;
         }
         else if(next->type == NODE_PTR){
             printQual(((struct astnode_ptr*)next)->qtype);
             printf("pointer to \n  ");
+            printSpec(next->child, spec_node, symtab, func, level+1);
+            return;
         }
-
-        level++;
-        for(int i = 0; i < level; i++)
-            printf(" ");
-
-        next = next->child;
-    }
-
-    struct astnode_typespec *spec_node = entry.generic->type_spec;
-    if(spec_node != NULL) {
-        printSpec(spec_node, symtab);
-        printf("\n");
-    }
-
-    if(isFunc){
-        if(entry.fncn->args == NULL || entry.fncn->args->numVals == 0){
-            printf("  and taking unknown arguments\n");
-        }
-        else {
-            printf("  and taking the following arguments\n");
-            for(int i = 0; i < entry.fncn->args->numVals; i++){
-                //TODO: will this cast be safe?
-                struct symtab_entry_generic *arg = (struct symtab_entry_generic *)entry.fncn->args->els[i];
-                if(arg->type_spec != NULL) {
-                    printSpec(arg->type_spec, symtab);
-                    printf("\n");
-                }
-            }
+        else if(next->type == NODE_FNCNDEC){
+            printf("function returning\n  ");
+            printSpec(next->child, spec_node, symtab, func, level+1);
+            printTabs2(func, level);
+            printArgs((struct astnode_fncndec*)next, symtab, func, level+1);
+            return;
         }
     }
-}
 
-void printSpec(struct astnode_typespec *spec_node, struct symtab *symtab){
     printQual(spec_node->qtype);
 
     enum type_flag sflags = spec_node->stype;
@@ -1171,13 +1190,38 @@ void printSpec(struct astnode_typespec *spec_node, struct symtab *symtab){
         else
             structDef = symtabLookup(symtab, TAG, structName, false).tag;
 
-        if(structDef == NULL)
+        if(structDef == NULL || !structDef->complete)
             printf("(incomplete)");
-        else if(!structDef->complete) //TODO: remove this to agree with Professor's output
-            printf("(incomplete defined at %s:%d)", structDef->file, structDef->line);
         else
             printf("(defined at %s:%d)", structDef->file, structDef->line);
         //TODO: lookup struct in curr table and print incomplete/location defined
+    }
+
+    printf("\n");
+}
+
+void printTabs2(bool func, long level){
+    if(func)
+        printf(" ");
+
+    for(int i = 0; i < level; i++)
+        printf(" ");
+}
+
+void printArgs(struct astnode_fncndec *fncn, struct symtab *symtab, bool func, long level){
+    if(fncn->args == NULL || fncn->args->numVals == 0){
+        printf("  and taking unknown arguments\n");
+    }
+    else {
+        printf("  and taking the following arguments\n");
+        for(int i = 0; i < fncn->args->numVals; i++){
+            //TODO: will this cast be safe?
+            struct symtab_entry_generic *arg = (struct symtab_entry_generic *)fncn->args->els[i];
+            if(arg->child != NULL && arg->type_spec != NULL) {
+                printf("  ");
+                printSpec(arg->child, arg->type_spec, symtab, func, level);
+            }
+        }
     }
 }
 
@@ -1205,7 +1249,7 @@ void printStruct(struct astnode_hdr *structHdr){
         currEntry = currEntry.generic->next;
     }
 
-    printf("} (size==%zu)\n", getStructSize(structNode));
+    printf("} (size==%zu)\n\n", getStructSize(structNode));
 }
 
 void finalizeStruct(struct astnode_hdr *structHdr){

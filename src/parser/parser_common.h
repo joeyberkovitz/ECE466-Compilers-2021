@@ -158,6 +158,9 @@ struct astnode_typespec {
     enum node_type type;
     struct astnode_spec_inter *parent, *child; // child for header
 
+    struct astnode_spec_inter **parents;
+    long numParents;
+
     enum type_flag stype;
     enum qual_flag qtype;
 
@@ -211,12 +214,12 @@ void symtabDestroy(struct symtab *symtab);
 union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name, bool singleScope);
 bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace);
 bool structMembEnter(struct symtab *symtab, union symtab_entry entry);
-struct astnode_hdr* varEnter(struct symtab *symtab, union symtab_entry entry);
+struct astnode_hdr* symEnter();
 struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union symtab_entry baseEntry, struct LexVal *ident, bool complete);
+void checkStructValidity();
 
 struct symtab_entry_generic* allocEntry(enum symtab_type type, bool clear);
 struct symtab_entry_generic* clearEntry(union symtab_entry entry);
-struct symtab_entry_generic* copyEntry(union symtab_entry entry);
 size_t getEntrySize(enum symtab_type type);
 
 void setStgSpec(union symtab_entry entry, struct symtab *symtab, struct LexVal *val);
@@ -229,19 +232,20 @@ void finalizeSpecs(union symtab_entry entry);
 void finalizeStruct(struct astnode_hdr *structHdr);
 
 struct astnode_ptr* allocPtr();
-struct astnode_spec_inter* setPtr(struct astnode_spec_inter *ptr, struct astnode_spec_inter *next, union symtab_entry entry);
+struct astnode_spec_inter* setPtr(struct astnode_spec_inter *ptr, struct astnode_spec_inter *next);
 struct astnode_spec_inter* allocAry(struct astnode_spec_inter *prev, struct LexVal *val, union symtab_entry entry, struct symtab *symtab);
-void freeInterNodes(union symtab_entry entry);
+void freeInterNodes();
 
-struct astnode_fncndec* startFuncDef(struct symtab *symtab, union symtab_entry baseEntry);
-struct astnode_lst* addFuncArg(struct symtab *symtab, union symtab_entry decl);
-struct astnode_hdr* endFuncDef(struct symtab *symtab);
+struct astnode_fncndec* startFuncDef(bool params);
+struct astnode_spec_inter* setFncn(struct astnode_fncndec *fncndec, struct astnode_spec_inter *prev);
+struct astnode_fncndec* addFuncArgs(struct astnode_lst *args, struct symtab *symtab, bool varArgs);
 
 void printDecl(struct symtab *symtab, union symtab_entry entry);
-void printSpec(struct astnode_typespec *spec_node, struct symtab *symtab);
+void printSpec(struct astnode_spec_inter *next, struct astnode_typespec *spec_node, struct symtab *symtab, bool func, long level);
 void printQual(enum qual_flag qflags);
+void printTabs2(bool func, long level);
+void printArgs(struct astnode_fncndec *fncn, struct symtab *symtab, bool func, long level);
 void printStruct(struct astnode_hdr *structHdr);
-//void allocAry(union symtab_entry entry, struct LexVal *val);
 
 
 struct symtab *currTab;
