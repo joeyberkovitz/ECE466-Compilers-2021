@@ -240,7 +240,7 @@ struct astnode_fncndec* startFuncDef(bool params);
 struct astnode_spec_inter* setFncn(struct astnode_fncndec *fncndec, struct astnode_spec_inter *prev);
 struct astnode_fncndec* addFuncArgs(struct astnode_lst *args, struct symtab *symtab, bool varArgs);
 
-void printDecl(struct symtab *symtab, union symtab_entry entry);
+void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum);
 void printSpec(struct astnode_spec_inter *next, struct astnode_typespec *spec_node, struct symtab *symtab, bool func, long level);
 void printQual(enum qual_flag qflags);
 void printTabs2(bool func, long level);

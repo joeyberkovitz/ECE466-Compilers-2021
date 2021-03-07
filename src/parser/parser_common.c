@@ -471,7 +471,7 @@ bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
     //Struct/union members will have printing occur later
     //Function prototype will be printed at end of prototype
     if(entry.generic->ns != TAG && entry.generic->ns != MEMBER && symtab->scope != SCOPE_PROTO)
-        printDecl(symtab, entry);
+        printDecl(symtab, entry, 0);
     return true;
 }
 
@@ -997,7 +997,7 @@ void printQual(enum qual_flag qflags){
         printf("volatile ");
 }
 
-void printDecl(struct symtab *symtab, union symtab_entry entry){
+void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum){
     char *storage, *usage;
     switch(entry.generic->stgclass){
         case STG_TYPEDEF:
@@ -1090,8 +1090,16 @@ void printDecl(struct symtab *symtab, union symtab_entry entry){
     }
     else if(isFunc)
         printf("%s   function returning:\n  ", storage);
-    else
-        printf("%s with stgclass %s  of type:\n  ", usage, storage);
+    else{
+        printf("%s ", usage);
+        if(argNum > 0 && symtab->scope == SCOPE_PROTO)
+            printf("(argument #%d) ", argNum);
+
+        if(entry.generic->stgclass != -1)
+            printf("with stgclass %s  ", storage);
+
+        printf("of type\n  ");
+    }
 
     struct astnode_spec_inter *child = entry.generic->child;
     struct astnode_typespec *spec_node = entry.generic->type_spec;
@@ -1101,7 +1109,7 @@ void printDecl(struct symtab *symtab, union symtab_entry entry){
     if(isFunc)
         printArgs(entry.fncn, symtab, true, 0);
 
-    if(symtab->scope != SCOPE_STRUCT)
+    if(symtab->scope != SCOPE_STRUCT && symtab->scope != SCOPE_PROTO)
         printf("\n");
 }
 
@@ -1222,6 +1230,14 @@ void printArgs(struct astnode_fncndec *fncn, struct symtab *symtab, bool func, l
                 printSpec(arg->child, arg->type_spec, symtab, func, level);
             }
         }
+
+        for(int i = 0; i < fncn->args->numVals; i++){
+            struct symtab_entry_generic *arg = (struct symtab_entry_generic*)fncn->args->els[i];
+            if(arg->child != NULL && arg->type_spec != NULL){
+                printf("\n");
+                printDecl((struct symtab*)fncn->scope, (union symtab_entry)arg, i+1);
+            }
+        }
     }
 }
 
@@ -1240,11 +1256,11 @@ void printStruct(struct astnode_hdr *structHdr){
         parentTab = parentTab->parent;
 
     //Print struct start info
-    printDecl(parentTab, (union symtab_entry)structNode);
+    printDecl(parentTab, (union symtab_entry)structNode, 0);
 
     union symtab_entry currEntry = structNode->container->head;
     while(currEntry.generic != NULL){
-        printDecl(structNode->container, currEntry);
+        printDecl(structNode->container, currEntry, 0);
 
         currEntry = currEntry.generic->next;
     }
