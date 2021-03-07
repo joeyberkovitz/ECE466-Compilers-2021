@@ -113,7 +113,7 @@
 %type  <hdr> designation
 %type  <hdr> designator-list
 %type  <hdr> designator
-%type  <fncndec> start-func-subroutine
+%type  <specInter> start-func-subroutine
 
 
 %initial-action {
@@ -360,8 +360,8 @@ declaration-specifier:
     ;
 
 init-declarator-list:
-        init-declarator                             {varEnter(currTab, currDecl);}
-    |   init-declarator-list ',' init-declarator    {varEnter(currTab, currDecl);}
+        init-declarator
+    |   init-declarator-list ',' init-declarator
     ;
 
 init-declarator:
@@ -478,21 +478,21 @@ function-specifier:
 
     /* 6.7.5 - Declarators */
 declarator:
-        pointer direct-declarator
-    |   direct-declarator
+        pointer direct-declarator {varEnter(currTab, currDecl);}
+    |   direct-declarator         {varEnter(currTab, currDecl);}
     ;
 
 direct-declarator:
-        IDENT                                                                        {currDecl.generic->ident = $1; $$ = (struct astnode_spec_inter*)currDecl.generic;}
-    |   '(' declarator {$<specInter>$ = currDecl.generic->type_spec->parent;} ')'    {$$ = $<specInter>3;}
+        IDENT                                                                     {currDecl.generic->ident = $1; $$ = (struct astnode_spec_inter*)currDecl.generic;}
+    |   '(' declarator {$<specInter>$ = currDecl.generic->type_spec->parent;} ')' {$$ = $<specInter>3;}
     /* Not per spec, adjusted per assignment 3 */
-    |   direct-declarator '[' NUMBER ']'                                             {$$ = allocAry($1, $3, currDecl, currTab);}
-    |   direct-declarator '[' ']'                                                    {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab);}
+    |   direct-declarator '[' NUMBER ']'                                          {$$ = allocAry($1, $3, currDecl, currTab);}
+    |   direct-declarator '[' ']'                                                 {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab);}
                                     /* Set st_type to indicate that curr entry was function, should be handled appropriately */
-    |   direct-declarator '(' start-func-subroutine parameter-type-list ')'          {currDecl.generic->st_type = ENTRY_FNCN;}
+    |   direct-declarator '(' start-func-subroutine parameter-type-list ')'       {currDecl.generic->st_type = ENTRY_FNCN;}
     /* K&R style functions ignored per assignment 3
-     * |   direct-declarator '(' start-func-subroutine identifier-list ')'              {currDecl.generic->st_type = ENTRY_FNCN;}*/
-    |   direct-declarator '(' start-func-subroutine ')'                              {currDecl.generic->st_type = ENTRY_FNCN;}
+    |   direct-declarator '(' start-func-subroutine identifier-list ')'*/
+    |   direct-declarator '(' start-func-subroutine ')'                           {currDecl.generic->st_type = ENTRY_FNCN;}
     ;
 
 start-func-subroutine:

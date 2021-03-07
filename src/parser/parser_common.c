@@ -498,16 +498,20 @@ bool structMembEnter(struct symtab *symtab, union symtab_entry entry){
     return symtabEnter(symtab, (union symtab_entry)membNode, false);
 }
 
-struct astnode_hdr* varEnter(struct symtab *symtab, union symtab_entry entry){
+struct symtab_entry_generic* symEnter(struct symtab *symtab, union symtab_entry entry){
     if(entry.generic->st_type == ENTRY_FNCN){
-        return endFuncDef(symtab);
+        endFuncDef(symtab);
     }
-    struct astnode_var *varNode = (struct astnode_var*)allocEntry(ENTRY_VAR, false);
-    memcpy(varNode, entry.generic, sizeof(struct symtab_entry_generic));
-    varNode->type = NODE_SYMTAB;
-    varNode->st_type=ENTRY_VAR;
-    varNode->ns=OTHER;
-    symtabEnter(symtab, (union symtab_entry)varNode, false);
+    else{
+        struct astnode_var *varNode = (struct astnode_var*)allocEntry(ENTRY_VAR, false);
+        memcpy(varNode, entry.generic, sizeof(struct symtab_entry_generic);
+        varNode->type = NODE_SYMTAB;
+        varNode->st_type = ENTRY_VAR;
+        varNode->ns = OTHER;
+        entry = (union symtab_entry)varNode;
+    }
+
+    symtabEnter(symtab, entry, false);
 
     return (struct astnode_hdr *) varNode;
 }
@@ -822,37 +826,35 @@ void finalizeSpecs(union symtab_entry entry){
     }
 }
 
-struct astnode_fncndec* startFuncDef(struct symtab *symtab, union symtab_entry baseEntry){
-    struct astnode_spec_inter *prev = baseEntry.generic->type_spec->parent;
-
-    if((struct symtab_entry_generic*)prev == baseEntry.generic){
-        //Good state - maybe nothing to do here
-    }
-    else if(prev->type == NODE_PTR){
-        //TODO: adjust currDecl as needed to indicate presence of pointer
-        printf("Handling pointer to function\n");
-    }
-    else {
-        //TODO: improve error handling
+struct astnode_fncndec* startFuncDef(struct symtab *symtab, struct astnode_spec_inter *prev, union symtab_entry entry){
+    if(prev->type != NODE_PTR || prev != (struct astnode_spec_inter*)entry.generic){
         printf("Error: can't allocate function with non-pointer parent\n");
-        return NULL;
+        exit(-1);
     }
 
     struct astnode_fncndec *fncndec = (struct astnode_fncndec *) allocEntry(ENTRY_FNCN, false);
-    memcpy(fncndec, baseEntry.generic, sizeof(struct symtab_entry_generic));
+    
+    if(prev->type == NODE_PTR){
+        fncndec->child = prev->child;
+        prev->child->parent = (struct astnode_spec_inter*)fncndec;
+        fncndec->parent = prev;
+        prev->child = (struct astnode_spec_inter*)fncndec;
+    }
+    else {
+        memcpy(fncndec, entry.generic, sizeof(struct symtab_entry_generic));
+        fncndec->type = NODE_SYMTAB;
+        fncndec->st_type = ENTRY_FNCN;
+        fncndec->unknown = true;
+        fncndec->varArgs = false;
+        fncndec->ns = OTHER;
+        fncndec->scope = (struct symtab_func*)symtabCreate(SCOPE_PROTO, TAB_FUNC);
+        fncndec->scope->parentFunc = fncndec;
 
-    fncndec->type = NODE_SYMTAB;
-    fncndec->st_type = ENTRY_FNCN;
-    fncndec->unknown = true;
-    fncndec->varArgs = false;
-    fncndec->ns = OTHER;
-    fncndec->scope = (struct symtab_func*)symtabCreate(SCOPE_PROTO, TAB_FUNC);
-    fncndec->scope->parentFunc = fncndec;
+        symtabEnter(symtab, (union symtab_entry)fncndec, false);
 
-    symtabEnter(symtab, (union symtab_entry)fncndec, false);
-
-    //Clear base entry for use with params
-    clearEntry(baseEntry);
+        //Clear base entry for use with params
+        clearEntry(baseEntry);
+    }
 
     return fncndec;
 }
