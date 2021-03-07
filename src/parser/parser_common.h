@@ -8,7 +8,7 @@ int yylex(void);
 void yyerror(char const*);
 void* mallocSafe(size_t size);
 
-void printTabs(int lvl);
+void printTabs1(int lvl);
 void printAst(struct astnode_hdr *hdr, int lvl);
 
 struct astnode_hdr*  allocUnop(struct astnode_hdr *opand, int opType);
@@ -16,6 +16,7 @@ struct astnode_hdr*  allocBinop(struct astnode_hdr *left, struct astnode_hdr *ri
 struct astnode_hdr*  allocTerop(struct astnode_hdr *first, struct astnode_hdr *second, struct astnode_hdr *third);
 
 struct astnode_hdr*  allocPostIncDec(struct LexVal *op, struct astnode_hdr *opand, int opType);
+struct astnode_hdr*  allocSizeof();
 struct astnode_hdr*  allocAssignment(struct astnode_hdr *left, struct astnode_hdr *right, struct LexVal *opType);
 
 struct astnode_lst* allocList(struct astnode_hdr *el);
@@ -218,7 +219,7 @@ bool structMembEnter(struct symtab *symtab, union symtab_entry entry);
 struct astnode_hdr* symCopyAndEnter(bool enter);
 struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union symtab_entry baseEntry, struct LexVal *ident, bool complete);
 void checkVoid();
-void checkStructValidity();
+int checkStructValidity();
 
 struct symtab_entry_generic* allocEntry(enum symtab_type type, bool clear);
 struct symtab_entry_generic* clearEntry(union symtab_entry entry);

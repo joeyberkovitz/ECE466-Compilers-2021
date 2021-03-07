@@ -291,8 +291,9 @@ unary-expression:
     |   PLUSPLUS unary-expression      {$$ = allocPostIncDec($1, $2, '+');}
     |   MINUSMINUS unary-expression    {$$ = allocPostIncDec($1, $2, '-');}
     |   unary-operator cast-expression {$$ = allocUnop($2, $1->sym);}
+    /* TODO: compute sizeof for expression */
     |   SIZEOF unary-expression        {$$ = allocUnop($2, SIZEOF);}
-        /* TODO: sizeof type-name; once we have type-names */
+    |   SIZEOF '(' type-name ')'       {$$ = allocSizeof();}
     ;
 
 unary-operator:

@@ -18,14 +18,14 @@ void yyerror(char const* s){
     fprintf(stderr, "%s:%d: Error: %s\n", currFile, currLine, s);
 }
 
-void printTabs(int lvl){
+void printTabs1(int lvl){
     for(int i = 0; i < lvl; i++)
         printf("  ");
 }
 
 void printAst(struct astnode_hdr *hdr, int lvl){
     union astnode *node = (union astnode*) &hdr;
-    printTabs(lvl);
+    printTabs1(lvl);
 
     switch (hdr->type) {
         case NODE_LEX:
@@ -33,7 +33,7 @@ void printAst(struct astnode_hdr *hdr, int lvl){
                 case IDENT:
                     printf("IDENT  %s\n", node->lexNode->value.string_val); break;
                 case NUMBER:
-                    switch (node->lexNode->flags) {
+                    switch (node->lexNode->tflags) {
                         case int_type: 
                             printf("CONSTANT:  (type=int)%lld\n", node->lexNode->value.num_val.integer_val); break;
                         case uint_type: 
@@ -120,7 +120,7 @@ void printAst(struct astnode_hdr *hdr, int lvl){
         case NODE_LST:
             for(int i = 0; i < node->lst->numVals; i++){
                 if(i > 0)
-                    printTabs(lvl);
+                    printTabs1(lvl);
 
                 printf("arg  #%d=\n", i + 1);
                 printAst(node->lst->els[i], lvl + 1);
@@ -168,11 +168,36 @@ struct astnode_hdr* allocPostIncDec(struct LexVal *op, struct astnode_hdr *opand
     lexVal->type = NODE_LEX;
     lexVal->file = op->file;
     lexVal->line = op->line;
-    lexVal->flags = int_type;
+    lexVal->tflags = int_type;
     lexVal->value.num_val.integer_val = 1;
     lexVal->sym = NUMBER;
 
     return (struct astnode_hdr *) allocBinop(opand, allocBinop(opand, (struct astnode_hdr *) lexVal, opType), '=');
+}
+
+struct astnode_hdr* allocSizeof(){
+    if(currDecl.generic->child->type == NODE_FNCNDEC){
+        fprintf(stderr, "attempting to compute sizeof function");
+        exit(-1);
+    }
+
+    if((hasFlag(currDecl.generic->type_spec->stype,void_type) && currDecl.generic->type_spec->parent->type != NODE_PTR) || (currDecl.generic->child->type == NODE_ARY && !((struct astnode_ary*)currDecl.generic->child)->complete) || checkStructValidity() > 0){
+        fprintf(stderr, "invalid application of sizeof to incomplete type");
+        exit(-1);
+    }
+
+    struct LexVal *lexVal = mallocSafe(sizeof(struct LexVal));
+    lexVal->type = NODE_LEX;
+    lexVal->file = currDecl.generic->file;
+    lexVal->line = currDecl.generic->line;
+    // TODO: target specific type of size_t
+    lexVal->tflags = ullint_type;
+    lexVal->value.num_val.integer_val = computeSizeof((struct astnode_hdr*)currDecl.generic);
+    lexVal->sym = NUMBER;
+
+    clearEntry(currDecl);
+
+    return (struct astnode_hdr*)lexVal;
 }
 
 struct astnode_hdr* allocAssignment(struct astnode_hdr *left, struct astnode_hdr *right, struct LexVal *opType){
@@ -242,7 +267,6 @@ size_t computeSizeof(struct astnode_hdr* el){
         case NODE_SYMTAB:
             switch (elUnion.symEntry->st_type) {
                 case ENTRY_GENERIC:
-                    break;
                 case ENTRY_VAR:
                 case ENTRY_SMEM:
                 case ENTRY_UMEM:
@@ -261,6 +285,7 @@ size_t computeSizeof(struct astnode_hdr* el){
                         exit(-1);
                     }
 
+                    // TODO: target specific size of pointers
                     if(node != NULL && node->type == NODE_PTR)
                         return multiplier*sizeof(long);
 
@@ -269,31 +294,31 @@ size_t computeSizeof(struct astnode_hdr* el){
                         return 0;
                     }
                     struct astnode_typespec *specNode = (struct astnode_typespec *)node;
-                    if(hasFlag(specNode->stype, char_type))
+                    if(hasFlag(specNode->stype,char_type))
                         return multiplier*sizeof(char);
-                    else if(hasFlag(specNode->stype, sint_type))
+                    else if(hasFlag(specNode->stype,sint_type))
                         return multiplier*sizeof(short);
                     else if(specNode->stype == int_type || specNode->stype == (int_type | signed_type) || specNode->stype == (int_type | unsigned_type))
                         return multiplier*sizeof(int);
-                    else if(hasFlag(specNode->stype, lint_type) && !hasFlag(specNode->stype, double_type))
+                    else if(hasFlag(specNode->stype,lint_type) && !hasFlag(specNode->stype,double_type))
                         return multiplier*sizeof(long);
-                    else if(hasFlag(specNode->stype, llint_type))
+                    else if(hasFlag(specNode->stype,llint_type))
                         return multiplier*sizeof(long long);
-                    else if(hasFlag(specNode->stype, float_type))
+                    else if(hasFlag(specNode->stype,float_type))
                         return multiplier*sizeof(float);
                     else if(specNode->stype == double_type)
                         return multiplier*sizeof(double);
                     else if(specNode->stype == ldouble_type)
                         return multiplier*sizeof(long double);
-                    else if(hasFlag(specNode->stype, bool_type))
+                    else if(hasFlag(specNode->stype,bool_type))
                         return multiplier*sizeof(_Bool);
-                    else if(hasFlag(specNode->stype, fcomplex_type))
+                    else if(hasFlag(specNode->stype,fcomplex_type))
                         return multiplier*sizeof(float _Complex);
-                    else if(hasFlag(specNode->stype, dcomplex_type))
+                    else if(hasFlag(specNode->stype,dcomplex_type))
                         return multiplier*sizeof(double _Complex);
-                    else if(hasFlag(specNode->stype, ldcomplex_type))
+                    else if(hasFlag(specNode->stype,ldcomplex_type))
                         return multiplier*sizeof(long double _Complex);
-                    else if(hasFlag(specNode->stype, struct_type))
+                    else if(hasFlag(specNode->stype,struct_type))
                         return multiplier*getStructSize((struct astnode_tag*)specNode->type_specs->els[0]);
                     break;
                 case ENTRY_STAG:
@@ -477,7 +502,15 @@ bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
 
 bool structMembEnter(struct symtab *symtab, union symtab_entry entry){
     checkVoid();
-    checkStructValidity();
+    int a = checkStructValidity();
+    if(a == 1){
+        fprintf(stderr, "Error: struct type set, but struct not present in type specs\n");
+        exit(-1);
+    }
+    if(a == 2){
+        fprintf(stderr, "Error: attempt to declare incomplete struct not of type pointer");
+        exit(-1);
+    }
 
     struct astnode_memb *membNode = (struct astnode_memb*)allocEntry(ENTRY_SMEM, false);
     memcpy(membNode, entry.generic, getEntrySize(entry.generic->st_type));
@@ -524,7 +557,16 @@ struct astnode_hdr* symCopyAndEnter(bool enter){
         entry = (union symtab_entry)fncndec;
     }
     else{
-        checkStructValidity();
+        int a = checkStructValidity();
+        if(a == 1){
+            fprintf(stderr, "Error: struct type set, but struct not present in type specs\n");
+            exit(-1);
+        }
+        if(a == 2){
+            fprintf(stderr, "Error: attempt to declare incomplete struct not of type pointer");
+            exit(-1);
+        }
+
         struct astnode_var *varNode = (struct astnode_var*)allocEntry(ENTRY_VAR, false);
         memcpy(varNode, currDecl.generic, sizeof(struct symtab_entry_generic));
         varNode->st_type = ENTRY_VAR;
@@ -554,14 +596,12 @@ void checkVoid(){
     }
 }
 
-void checkStructValidity(){
+int checkStructValidity(){
     // Check struct validity
     struct astnode_typespec *spec_node = currDecl.generic->type_spec;
     if (hasFlag(spec_node->stype, struct_type)) {
-        if(spec_node->type_specs->numVals != 1 || spec_node->type_specs->els[0]->type != NODE_SYMTAB || ((struct symtab_entry_generic*)spec_node->type_specs->els[0])->st_type != ENTRY_STAG){
-            fprintf(stderr, "Error: struct type set, but struct not present in type specs\n");
-            exit(EXIT_FAILURE);
-        }
+        if(spec_node->type_specs->numVals != 1 || spec_node->type_specs->els[0]->type != NODE_SYMTAB || ((struct symtab_entry_generic*)spec_node->type_specs->els[0])->st_type != ENTRY_STAG)
+            return 1;
 
         struct astnode_tag *structNode = (struct astnode_tag*)spec_node->type_specs->els[0];
         bool structComplete = false;
@@ -573,11 +613,11 @@ void checkStructValidity(){
         else if(structNode->complete)
             structComplete = true;
 
-        if(!structComplete && currDecl.generic->type_spec->parent->type != NODE_PTR){
-            fprintf(stderr, "Error: attempt to declare incomplete struct not of type pointer");
-            exit(EXIT_FAILURE);
-        }
+        if(!structComplete && currDecl.generic->type_spec->parent->type != NODE_PTR)
+            return 2;
     }
+
+    return 0;
 }
 
 struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union symtab_entry baseEntry, struct LexVal *ident, bool complete){
