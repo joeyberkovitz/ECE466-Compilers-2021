@@ -498,6 +498,17 @@ struct astnode_hdr* symEnter(){
     if(currTab->scope == SCOPE_STRUCT)
         return (struct astnode_hdr*)NULL;
 
+    if(currTab->scope == SCOPE_PROTO){
+        if(currDecl.generic->child->type == NODE_ARY){
+            // TODO: error check
+            currDecl.generic->child = realloc(currDecl.generic->child, sizeof(struct astnode_ptr));
+            currDecl.generic->child->type = NODE_PTR;
+            ((struct astnode_ptr*)currDecl.generic->child)->qtype = 0;
+        }
+        else if(currDecl.generic->child->type == NODE_FNCNDEC)
+            setPtr((struct astnode_spec_inter*)allocPtr(), currDecl.generic->child);
+    }
+
     union symtab_entry entry;
     if(currDecl.generic->child->type == NODE_FNCNDEC){
         struct astnode_fncndec *fncndec = (struct astnode_fncndec*)currDecl.generic->child;
@@ -511,30 +522,6 @@ struct astnode_hdr* symEnter(){
     }
     else{
         checkStructValidity();
-        /*// Check struct validity
-        struct astnode_typespec *spec_node = currDecl.generic->type_spec;
-        if (hasFlag(spec_node->stype, struct_type)) {
-            if(spec_node->type_specs->numVals != 1 || spec_node->type_specs->els[0]->type != NODE_SYMTAB || ((struct symtab_entry_generic*)spec_node->type_specs->els[0])->st_type != ENTRY_STAG){
-                fprintf(stderr, "Error: struct type set, but struct not present in type specs\n");
-                exit(EXIT_FAILURE);
-            }
-
-            struct astnode_tag *structNode = (struct astnode_tag*)spec_node->type_specs->els[0];
-            bool structComplete = false;
-            if(!structNode->complete && structNode->ident != NULL){
-                struct astnode_tag *lookupNode = symtabLookup(currTab, TAG, structNode->ident->value.string_val, false).tag;
-                if(lookupNode != NULL && lookupNode->complete)
-                    structComplete = true;
-            }
-            else if(structNode->complete)
-                structComplete = true;
-
-            if(!structComplete && currDecl.generic->type_spec->parent->type != NODE_PTR){
-                fprintf(stderr, "Error: attempt to declare incomplete struct not of type pointer");
-                exit(EXIT_FAILURE);
-            }
-        }*/
-        
         struct astnode_var *varNode = (struct astnode_var*)allocEntry(ENTRY_VAR, false);
         memcpy(varNode, currDecl.generic, sizeof(struct symtab_entry_generic));
         varNode->st_type = ENTRY_VAR;
