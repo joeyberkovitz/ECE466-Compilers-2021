@@ -502,6 +502,32 @@ struct astnode_hdr* varEnter(struct symtab *symtab, union symtab_entry entry){
     if(entry.generic->st_type == ENTRY_FNCN){
         return endFuncDef(symtab);
     }
+
+    // Check struct validity
+    struct astnode_typespec *spec_node = entry.generic->type_spec;
+    if (hasFlag(spec_node->stype, struct_type)) {
+        if(spec_node->type_specs->numVals != 1 || spec_node->type_specs->els[0]->type != NODE_SYMTAB
+            || ((struct symtab_entry_generic*)spec_node->type_specs->els[0])->st_type != ENTRY_STAG){
+            fprintf(stderr, "Error: struct type set, but struct not present in type specs\n");
+            exit(EXIT_FAILURE);
+        }
+
+        struct astnode_tag *structNode = (struct astnode_tag*)spec_node->type_specs->els[0];
+        bool structComplete = false;
+        if(!structNode->complete && structNode->ident != NULL){
+                struct astnode_tag *lookupNode = symtabLookup(symtab, TAG, structNode->ident->value.string_val, false).tag;
+                if(lookupNode != NULL && lookupNode->complete)
+                    structComplete = true;
+        }
+        else if(structNode->complete)
+            structComplete = true;
+
+        if(!structComplete && entry.generic->type_spec->parent->type != NODE_PTR){
+            fprintf(stderr, "Error: attempt to declare incomplete struct not of type pointer");
+            exit(EXIT_FAILURE);
+        }
+    }
+
     struct astnode_var *varNode = (struct astnode_var*)allocEntry(ENTRY_VAR, false);
     memcpy(varNode, entry.generic, sizeof(struct symtab_entry_generic));
     varNode->type = NODE_SYMTAB;
