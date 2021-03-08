@@ -25,7 +25,7 @@ void addToList(struct astnode_lst *lst, struct astnode_hdr *el);
 
 struct astnode_hdr* allocFunc(struct astnode_hdr *name, struct astnode_lst *lst);
 size_t computeSizeof(struct astnode_hdr* el);
-size_t getStructSize(struct astnode_tag *structNode);
+size_t getStructSize(struct astnode_tag *structNode, bool ignoreIncomplete);
 
 enum tab_type {
     TAB_GENERIC,
@@ -235,7 +235,7 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val);
 void addTypeQual(enum qual_flag *qtype, struct astnode_lst *qual_types, struct LexVal *val, bool ptr);
 
 void finalizeSpecs(union symtab_entry entry);
-void finalizeStruct(struct astnode_hdr *structHdr);
+void finalizeStruct(struct astnode_hdr *structHdr, bool complete);
 
 struct astnode_ptr* allocPtr();
 struct astnode_spec_inter* setPtr(struct astnode_spec_inter *ptr, struct astnode_spec_inter *next);

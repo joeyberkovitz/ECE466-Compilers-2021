@@ -343,7 +343,7 @@ size_t computeSizeof(struct astnode_hdr* el){
                     else if(hasFlag(specNode->stype,ldcomplex_type))
                         return multiplier*sizeof(long double _Complex);
                     else if(hasFlag(specNode->stype,struct_type))
-                        return multiplier*getStructSize((struct astnode_tag*)specNode->type_specs->els[0]);
+                        return multiplier*getStructSize((struct astnode_tag*)specNode->type_specs->els[0], false);
                     break;
                 case ENTRY_STAG:
                 case ENTRY_UTAG:
@@ -362,7 +362,7 @@ size_t computeSizeof(struct astnode_hdr* el){
     return 0;
 }
 
-size_t getStructSize(struct astnode_tag *structNode){
+size_t getStructSize(struct astnode_tag *structNode, bool ignoreIncomplete){
     if(structNode->type != NODE_SYMTAB || (structNode->st_type != ENTRY_STAG && structNode->st_type != ENTRY_UTAG)){
         fprintf(stderr, "Error: getStructSize called with node not of type struct/union tag\n");
         return 0;
@@ -378,7 +378,7 @@ size_t getStructSize(struct astnode_tag *structNode){
         union symtab_entry lookupVal = symtabLookup(currTab, TAG, structNode->ident->value.string_val, false);
         if(lookupVal.generic == NULL ||
             (lookupVal.generic->st_type != ENTRY_STAG && lookupVal.generic->st_type != ENTRY_UTAG) ||
-            !lookupVal.tag->complete || lookupVal.tag->container == NULL
+            (!lookupVal.tag->complete && !ignoreIncomplete) || lookupVal.tag->container == NULL
         ){
             fprintf(stderr, "Attempting to compute sizeof struct/union %s with incomplete type\n",
                     structNode->ident->value.string_val);
@@ -505,8 +505,8 @@ bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
             goto success;
         }
         else{
-            fprintf(stderr, "Warning: value already exists in symtab and replace not set, ignoring\n");
-            return false;
+            fprintf(stderr, "Error: value already exists in symtab and replace not set, ignoring\n");
+            exit(EXIT_FAILURE);
         }
     }
 
@@ -565,7 +565,7 @@ bool structMembEnter(struct symtab *symtab, union symtab_entry entry){
 
     membNode->bitOffset = 0;
     membNode->bitWidth = 0;
-    membNode->structOffset = getStructSize(structNode);
+    membNode->structOffset = getStructSize(structNode, true);
 
     return symtabEnter(symtab, (union symtab_entry)membNode, false);
 }
@@ -675,7 +675,7 @@ struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union 
     memcpy(structNode, baseEntry.generic, sizeof(struct symtab_entry_generic));
     structNode->type = NODE_SYMTAB;
     structNode->st_type = type->sym == STRUCT ? ENTRY_STAG : ENTRY_UTAG;
-    structNode->complete = complete;
+    structNode->complete = false; //Not complete until closing "}"
     structNode->ident = ident;
     structNode->ns = TAG;
     structNode->incAry = false;
@@ -698,8 +698,10 @@ struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union 
         //2. Existing entry present, but not complete and current entry complete
         if (existingEntry.generic == NULL || (!existingEntry.tag->complete && complete))
             symtabEnter(symtab, (union symtab_entry) structNode, true);
-        else if (existingEntry.generic != NULL && existingEntry.tag->complete && complete)
+        else if (existingEntry.generic != NULL && existingEntry.tag->complete && complete) {
             fprintf(stderr, "Attempted redeclaration of struct %s failed\n", ident->value.string_val);
+            exit(EXIT_FAILURE);
+        }
         else{
             structNode->incAry = existingEntry.tag->incAry;
             structNode->namedEntry = existingEntry.tag->namedEntry;
@@ -1217,7 +1219,7 @@ void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum){
     else{
         printf("%s ", usage);
         if(argNum > 0 && symtab->scope == SCOPE_PROTO)
-            printf("(argument #%d) ", argNum);
+            printf("(argument #%ld) ", argNum);
 
         if(entry.generic->stgclass != -1)
             printf("with stgclass %s  ", storage);
@@ -1397,11 +1399,13 @@ void printStruct(struct astnode_hdr *structHdr){
         currEntry = currEntry.generic->next;
     }
 
-    printf("} (size==%zu)\n\n", getStructSize(structNode));
+    printf("} (size==%zu)\n\n", getStructSize(structNode, false));
 }
 
-void finalizeStruct(struct astnode_hdr *structHdr){
+void finalizeStruct(struct astnode_hdr *structHdr, bool complete){
     struct astnode_tag *structNode = (struct astnode_tag*)structHdr;
+    structNode->complete = complete;
+
     if(structNode->complete && !structNode->namedEntry){
         fprintf(stderr, "flexible array member in struct with no named members");
         exit(-1);
