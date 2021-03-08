@@ -363,6 +363,7 @@ size_t computeSizeof(struct astnode_hdr* el){
 }
 
 size_t getStructSize(struct astnode_tag *structNode){
+    // TODO: alignment issues
     if(structNode->type != NODE_SYMTAB || (structNode->st_type != ENTRY_STAG && structNode->st_type != ENTRY_UTAG)){
         fprintf(stderr, "Error: getStructSize called with node not of type struct/union tag\n");
         return 0;
@@ -767,6 +768,7 @@ struct symtab_entry_generic* clearEntry(union symtab_entry entry){
 }
 
 void setStgSpec(union symtab_entry entry, struct symtab *symtab, struct LexVal *val){
+    // TODO: stgclass of struct variable applies to all members
     if(entry.generic->stgclass == -1){
         if(symtab->scope == SCOPE_FILE && (val->sym == AUTO || val->sym == REGISTER)){
             fprintf(stderr, "no auto or register in file scope");
