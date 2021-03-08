@@ -415,13 +415,31 @@ size_t getTabSize(enum tab_type tabType){
     }
 }
 
-struct symtab* symtabCreate(enum symtab_scope scope, enum tab_type tabType){
+struct symtab* symtabCreate(enum symtab_scope scope, enum tab_type tabType, struct LexVal *startLex){
     struct symtab *symtab = mallocSafe(getTabSize(tabType));
     symtab->tabType = tabType;
     symtab->scope = scope;
     symtab->parent = currTab;
     symtab->head.generic = NULL;
     symtab->numChildren = 0;
+    char *startFile;
+    int startLine;
+    if(startLex->type == NODE_LEX){
+        startFile = startLex->file;
+        startLine = startLex->line;
+    }
+    else if(startLex->type == NODE_SYMTAB){
+        startFile = ((struct symtab_entry_generic*)startLex)->file;
+        startLine = ((struct symtab_entry_generic*)startLex)->line;
+    }
+    else{
+        startFile = "n/a";
+        startLine = 0;
+        fprintf(stderr, "Received unknown type %d in symtabCreate, unable to extract debug information\n", startLex->type);
+    }
+
+    symtab->file = startFile;
+    symtab->line = startLine;
 
     if(currTab != NULL){
         currTab->numChildren++;
@@ -438,11 +456,11 @@ void exitScope(){
     currTab = currTab->parent;
 }
 
-void enterBlockScope(){
+void enterBlockScope(struct LexVal *lexVal){
     if(currTab->scope == SCOPE_PROTO)
         currTab->scope = SCOPE_FUNC;
     else
-        symtabCreate(SCOPE_BLOCK, TAB_GENERIC);
+        symtabCreate(SCOPE_BLOCK, TAB_GENERIC, lexVal);
 }
 
 void enterFuncScope(struct astnode_hdr *func){
@@ -691,7 +709,7 @@ int checkStructValidity(){
     return 0;
 }
 
-struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union symtab_entry baseEntry, struct LexVal *ident, bool complete){
+struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union symtab_entry baseEntry, struct LexVal *ident, struct LexVal *scopeStart, bool complete){
     struct astnode_tag* structNode = (struct astnode_tag*)allocEntry(ENTRY_STAG, false);
     //Copy base node into curr node - works because same header for generic
     memcpy(structNode, baseEntry.generic, sizeof(struct symtab_entry_generic));
@@ -702,7 +720,7 @@ struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union 
     structNode->ns = TAG;
     structNode->incAry = false;
     structNode->namedEntry = false;
-    structNode->container = complete ? symtabCreate(SCOPE_STRUCT, TAB_STRUCT) : NULL;
+    structNode->container = complete ? symtabCreate(SCOPE_STRUCT, TAB_STRUCT, scopeStart) : NULL;
     structNode->file = type->file;
     structNode->line = type->line;
     if(structNode->container != NULL)
@@ -996,14 +1014,14 @@ void finalizeSpecs(union symtab_entry entry){
     }
 }
 
-struct astnode_fncndec* startFuncDef(bool params){
+struct astnode_fncndec* startFuncDef(bool params, struct LexVal *lexVal){
     struct astnode_fncndec *fncndec = (struct astnode_fncndec *) allocEntry(ENTRY_FNCN, false);
     
     fncndec->type = NODE_FNCNDEC;
     fncndec->unknown = true;
     fncndec->none = false;
     if(params){
-        fncndec->scope = (struct symtab_func*)symtabCreate(SCOPE_PROTO, TAB_FUNC);
+        fncndec->scope = (struct symtab_func*)symtabCreate(SCOPE_PROTO, TAB_FUNC, lexVal);
         fncndec->scope->parentFunc = fncndec;
         currDecl.generic = allocEntry(ENTRY_GENERIC, true);
     }
@@ -1222,8 +1240,8 @@ void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum){
         return;
     }
 
-    printf("%s is defined at %s:%d [in %s scope] as a \n", entry.generic->ident->value.string_val,
-           entry.generic->file, entry.generic->line, scope);
+    printf("%s is defined at %s:%d [in %s scope starting at %s:%d] as a \n", entry.generic->ident->value.string_val,
+           entry.generic->file, entry.generic->line, scope, symtab->file, symtab->line);
     if(isMemb) {
         char *structName, *structType;
         if (symtab->tabType != TAB_STRUCT) {
