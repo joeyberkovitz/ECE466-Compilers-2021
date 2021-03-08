@@ -400,10 +400,10 @@ type-specifier:
 struct-or-union-specifier:
         struct-or-union '{'
                 {$<hdr>$=genStruct($1, currTab, currDecl, (struct LexVal*)NULL, true);}
-                struct-declaration-list '}'              {$<hdr>$ = $<hdr>3; printStruct($$); finalizeStruct($$); exitScope();}
+                struct-declaration-list '}'              {$<hdr>$ = $<hdr>3; finalizeStruct($$); printStruct($$); exitScope();}
     |   struct-or-union IDENT '{'
                 {$<hdr>$=genStruct($1, currTab, currDecl, $2, true);}
-                struct-declaration-list '}'              {$<hdr>$ = $<hdr>4; printStruct($$); finalizeStruct($$); exitScope();}
+                struct-declaration-list '}'              {$<hdr>$ = $<hdr>4; finalizeStruct($$); printStruct($$); exitScope();}
     |   struct-or-union IDENT                            {$$=genStruct($1, currTab, currDecl, $2, false); finalizeStruct($$);}
     ;
 

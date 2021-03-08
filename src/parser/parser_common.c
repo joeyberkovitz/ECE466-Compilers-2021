@@ -296,6 +296,9 @@ size_t computeSizeof(struct astnode_hdr* el){
                     long multiplier = 1;
                     struct astnode_spec_inter *node = elUnion.symEntry->child;
                     while(node != NULL && node->type == NODE_ARY){
+                        if(!((struct astnode_ary*)node)->complete)
+                            return 0;
+
                         multiplier *= ((struct astnode_ary*)node)->length;
                         node = node->child;
                     }
@@ -522,6 +525,17 @@ bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
 }
 
 bool structMembEnter(struct symtab *symtab, union symtab_entry entry){
+    struct astnode_tag *structNode = ((struct symtab_struct*)symtab)->parentStruct;
+    if(structNode->incAry){
+        fprintf(stderr, "flexible array member not at end of struct");
+        exit(-1);
+    }
+
+    if(entry.generic->child->type == NODE_FNCNDEC){
+        fprintf(stderr, "field declared as a function");
+        exit(-1);
+    }
+
     checkVoid();
     int a = checkStructValidity();
     if(a == 1){
@@ -532,6 +546,15 @@ bool structMembEnter(struct symtab *symtab, union symtab_entry entry){
         fprintf(stderr, "Error: attempt to declare incomplete struct not of type pointer");
         exit(-1);
     }
+    if(a == 3){
+        fprintf(stderr, "Error: attempt to declare struct with member struct with flexible array member");
+        exit(-1);
+    }
+
+    if(entry.generic->child->type == NODE_ARY && !((struct astnode_ary*)entry.generic->child)->complete)
+        structNode->incAry = true;
+    else
+        structNode->namedEntry = true;
 
     struct astnode_memb *membNode = (struct astnode_memb*)allocEntry(ENTRY_SMEM, false);
     memcpy(membNode, entry.generic, getEntrySize(entry.generic->st_type));
@@ -540,7 +563,6 @@ bool structMembEnter(struct symtab *symtab, union symtab_entry entry){
     membNode->st_type=ENTRY_SMEM;
     membNode->ns=MEMBER;
 
-    struct astnode_tag *structNode = ((struct symtab_struct*)symtab)->parentStruct;
     membNode->bitOffset = 0;
     membNode->bitWidth = 0;
     membNode->structOffset = getStructSize(structNode);
@@ -583,8 +605,12 @@ struct astnode_hdr* symCopyAndEnter(bool enter){
             fprintf(stderr, "Error: struct type set, but struct not present in type specs\n");
             exit(-1);
         }
-        if(a == 2){
+        else if(a == 2){
             fprintf(stderr, "Error: attempt to declare incomplete struct not of type pointer");
+            exit(-1);
+        }
+        else if(a == 3 && currDecl.generic->type_spec->parent->type == NODE_ARY){
+            fprintf(stderr, "Error: attempt to declare array of structs with flexible array member");
             exit(-1);
         }
 
@@ -633,9 +659,11 @@ int checkStructValidity(){
         }
         else if(structNode->complete)
             structComplete = true;
-
+        
         if(!structComplete && currDecl.generic->type_spec->parent->type != NODE_PTR)
             return 2;
+        else if(structComplete && structNode->incAry)
+            return 3;
     }
 
     return 0;
@@ -650,12 +678,13 @@ struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union 
     structNode->complete = complete;
     structNode->ident = ident;
     structNode->ns = TAG;
+    structNode->incAry = false;
+    structNode->namedEntry = false;
     structNode->container = complete ? symtabCreate(SCOPE_STRUCT, TAB_STRUCT) : NULL;
     structNode->file = type->file;
     structNode->line = type->line;
-    if(structNode->container != NULL){
+    if(structNode->container != NULL)
         ((struct symtab_struct*)structNode->container)->parentStruct = structNode;
-    }
 
     if(ident != NULL) {
         struct symtab *searchTab = symtab;
@@ -671,6 +700,10 @@ struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union 
             symtabEnter(symtab, (union symtab_entry) structNode, true);
         else if (existingEntry.generic != NULL && existingEntry.tag->complete && complete)
             fprintf(stderr, "Attempted redeclaration of struct %s failed\n", ident->value.string_val);
+        else{
+            structNode->incAry = existingEntry.tag->incAry;
+            structNode->namedEntry = existingEntry.tag->namedEntry;
+        }
     }
 
     //Clear entry since it'll be reused for struct members, or if not present declaration is done anyway
@@ -1032,7 +1065,7 @@ struct astnode_spec_inter* allocAry(struct astnode_spec_inter *prev, struct LexV
         exit(-1);
     }
 
-    if(val == NULL && symtab->scope != SCOPE_PROTO && entry.generic->stgclass != STG_EXTERN && (entry.generic->stgclass != -1 || symtab->scope != SCOPE_FILE)){
+    if(val == NULL && symtab->scope != SCOPE_PROTO && symtab->scope != SCOPE_STRUCT && entry.generic->stgclass != STG_EXTERN && (entry.generic->stgclass != -1 || symtab->scope != SCOPE_FILE)){
         fprintf(stderr, "array size not specified");
         exit(-1);
     }
@@ -1369,6 +1402,11 @@ void printStruct(struct astnode_hdr *structHdr){
 
 void finalizeStruct(struct astnode_hdr *structHdr){
     struct astnode_tag *structNode = (struct astnode_tag*)structHdr;
+    if(structNode->complete && !structNode->namedEntry){
+        fprintf(stderr, "flexible array member in struct with no named members");
+        exit(-1);
+    }
+
     currDecl.generic->stgclass = structNode->stgclass;
     currDecl.generic->storageNode = structNode->storageNode;
     currDecl.generic->type_spec->qtype = structNode->type_spec->qtype;

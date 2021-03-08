@@ -146,6 +146,8 @@ struct astnode_tag {
 
     //Struct specific info:
     bool complete;
+    bool incAry;
+    bool namedEntry;
     struct symtab *container;
 };
 
