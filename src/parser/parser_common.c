@@ -343,7 +343,7 @@ size_t computeSizeof(struct astnode_hdr* el){
                     else if(hasFlag(specNode->stype,ldcomplex_type))
                         return multiplier*sizeof(long double _Complex);
                     else if(hasFlag(specNode->stype,struct_type))
-                        return multiplier*getStructSize((struct astnode_tag*)specNode->type_specs->els[0]);
+                        return multiplier*getStructSize((struct astnode_tag*)specNode->type_specs->els[0], false);
                     break;
                 case ENTRY_STAG:
                 case ENTRY_UTAG:
@@ -362,24 +362,23 @@ size_t computeSizeof(struct astnode_hdr* el){
     return 0;
 }
 
-size_t getStructSize(struct astnode_tag *structNode){
+size_t getStructSize(struct astnode_tag *structNode, bool ignoreIncomplete){
     // TODO: alignment issues
     if(structNode->type != NODE_SYMTAB || (structNode->st_type != ENTRY_STAG && structNode->st_type != ENTRY_UTAG)){
         fprintf(stderr, "Error: getStructSize called with node not of type struct/union tag\n");
         return 0;
     }
 
-    //TODO: not handling ENTRY_UTAG, just treating as struct
     size_t totalSize = 0;
     struct symtab *structSymtab;
-    if(structNode->complete && structNode->container != NULL)
+    if(structNode->container != NULL)
         structSymtab = structNode->container;
     else {
         //TODO: will we always be in the correct symbol table when attempting to compute sizeof?
         union symtab_entry lookupVal = symtabLookup(currTab, TAG, structNode->ident->value.string_val, false);
         if(lookupVal.generic == NULL ||
             (lookupVal.generic->st_type != ENTRY_STAG && lookupVal.generic->st_type != ENTRY_UTAG) ||
-            !lookupVal.tag->complete || lookupVal.tag->container == NULL
+            (!lookupVal.tag->complete && !ignoreIncomplete) || lookupVal.tag->container == NULL
         ){
             fprintf(stderr, "Attempting to compute sizeof struct/union %s with incomplete type\n",
                     structNode->ident->value.string_val);
@@ -390,7 +389,13 @@ size_t getStructSize(struct astnode_tag *structNode){
 
     union symtab_entry currEntry = structSymtab->head;
     while(currEntry.generic != NULL){
-        totalSize += computeSizeof((struct astnode_hdr*)currEntry.generic);
+        if(structNode->st_type == ENTRY_STAG)
+            totalSize += computeSizeof((struct astnode_hdr*)currEntry.generic);
+        else {
+            size_t entrySize = computeSizeof((struct astnode_hdr*)currEntry.generic);
+            if(entrySize > totalSize)
+                totalSize = entrySize;
+        }
         currEntry = currEntry.generic->next;
     }
 
@@ -411,13 +416,31 @@ size_t getTabSize(enum tab_type tabType){
     }
 }
 
-struct symtab* symtabCreate(enum symtab_scope scope, enum tab_type tabType){
+struct symtab* symtabCreate(enum symtab_scope scope, enum tab_type tabType, struct LexVal *startLex){
     struct symtab *symtab = mallocSafe(getTabSize(tabType));
     symtab->tabType = tabType;
     symtab->scope = scope;
     symtab->parent = currTab;
     symtab->head.generic = NULL;
     symtab->numChildren = 0;
+    char *startFile;
+    int startLine;
+    if(startLex->type == NODE_LEX){
+        startFile = startLex->file;
+        startLine = startLex->line;
+    }
+    else if(startLex->type == NODE_SYMTAB){
+        startFile = ((struct symtab_entry_generic*)startLex)->file;
+        startLine = ((struct symtab_entry_generic*)startLex)->line;
+    }
+    else{
+        startFile = "n/a";
+        startLine = 0;
+        fprintf(stderr, "Received unknown type %d in symtabCreate, unable to extract debug information\n", startLex->type);
+    }
+
+    symtab->file = startFile;
+    symtab->line = startLine;
 
     if(currTab != NULL){
         currTab->numChildren++;
@@ -432,6 +455,19 @@ struct symtab* symtabCreate(enum symtab_scope scope, enum tab_type tabType){
 
 void exitScope(){
     currTab = currTab->parent;
+}
+
+void enterBlockScope(struct LexVal *lexVal){
+    if(currTab->scope == SCOPE_PROTO)
+        currTab->scope = SCOPE_FUNC;
+    else
+        symtabCreate(SCOPE_BLOCK, TAB_GENERIC, lexVal);
+}
+
+void enterFuncScope(struct astnode_hdr *func){
+    struct astnode_fncndec *fncNode = (struct astnode_fncndec*)func;
+    currTab = (struct symtab*)(fncNode)->scope;
+    fncNode->unknown = false;
 }
 
 void symtabDestroy(struct symtab *symtab){
@@ -506,8 +542,8 @@ bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
             goto success;
         }
         else{
-            fprintf(stderr, "Warning: value already exists in symtab and replace not set, ignoring\n");
-            return false;
+            fprintf(stderr, "Error: value already exists in symtab and replace not set, ignoring\n");
+            exit(EXIT_FAILURE);
         }
     }
 
@@ -557,16 +593,17 @@ bool structMembEnter(struct symtab *symtab, union symtab_entry entry){
     else
         structNode->namedEntry = true;
 
+    //ENTRY_SMEM and ENTRY_UMEM are same struct, so no problem here
     struct astnode_memb *membNode = (struct astnode_memb*)allocEntry(ENTRY_SMEM, false);
     memcpy(membNode, entry.generic, getEntrySize(entry.generic->st_type));
 
     membNode->type=NODE_SYMTAB;
-    membNode->st_type=ENTRY_SMEM;
+    membNode->st_type= structNode->st_type == ENTRY_STAG ? ENTRY_SMEM : ENTRY_UMEM;
     membNode->ns=MEMBER;
 
     membNode->bitOffset = 0;
     membNode->bitWidth = 0;
-    membNode->structOffset = getStructSize(structNode);
+    membNode->structOffset = structNode->st_type == ENTRY_STAG ? getStructSize(structNode, true) : 0;
 
     return symtabEnter(symtab, (union symtab_entry)membNode, false);
 }
@@ -648,7 +685,10 @@ int checkStructValidity(){
     // Check struct validity
     struct astnode_typespec *spec_node = currDecl.generic->type_spec;
     if (hasFlag(spec_node->stype, struct_type)) {
-        if(spec_node->type_specs->numVals != 1 || spec_node->type_specs->els[0]->type != NODE_SYMTAB || ((struct symtab_entry_generic*)spec_node->type_specs->els[0])->st_type != ENTRY_STAG)
+        if(spec_node->type_specs->numVals != 1 || spec_node->type_specs->els[0]->type != NODE_SYMTAB ||
+                ( ((struct symtab_entry_generic*)spec_node->type_specs->els[0])->st_type != ENTRY_STAG &&
+                    ((struct symtab_entry_generic*)spec_node->type_specs->els[0])->st_type != ENTRY_UTAG )
+        )
             return 1;
 
         struct astnode_tag *structNode = (struct astnode_tag*)spec_node->type_specs->els[0];
@@ -670,18 +710,18 @@ int checkStructValidity(){
     return 0;
 }
 
-struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union symtab_entry baseEntry, struct LexVal *ident, bool complete){
+struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union symtab_entry baseEntry, struct LexVal *ident, struct LexVal *scopeStart, bool complete){
     struct astnode_tag* structNode = (struct astnode_tag*)allocEntry(ENTRY_STAG, false);
     //Copy base node into curr node - works because same header for generic
     memcpy(structNode, baseEntry.generic, sizeof(struct symtab_entry_generic));
     structNode->type = NODE_SYMTAB;
     structNode->st_type = type->sym == STRUCT ? ENTRY_STAG : ENTRY_UTAG;
-    structNode->complete = complete;
+    structNode->complete = false; //Not complete until closing "}"
     structNode->ident = ident;
     structNode->ns = TAG;
     structNode->incAry = false;
     structNode->namedEntry = false;
-    structNode->container = complete ? symtabCreate(SCOPE_STRUCT, TAB_STRUCT) : NULL;
+    structNode->container = complete ? symtabCreate(SCOPE_STRUCT, TAB_STRUCT, scopeStart) : NULL;
     structNode->file = type->file;
     structNode->line = type->line;
     if(structNode->container != NULL)
@@ -699,8 +739,10 @@ struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union 
         //2. Existing entry present, but not complete and current entry complete
         if (existingEntry.generic == NULL || (!existingEntry.tag->complete && complete))
             symtabEnter(symtab, (union symtab_entry) structNode, true);
-        else if (existingEntry.generic != NULL && existingEntry.tag->complete && complete)
+        else if (existingEntry.generic != NULL && existingEntry.tag->complete && complete) {
             fprintf(stderr, "Attempted redeclaration of struct %s failed\n", ident->value.string_val);
+            exit(EXIT_FAILURE);
+        }
         else{
             structNode->incAry = existingEntry.tag->incAry;
             structNode->namedEntry = existingEntry.tag->namedEntry;
@@ -926,7 +968,8 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
                 }
         }
     }
-    else if(val->type == NODE_SYMTAB && ((struct symtab_entry_generic*)val)->st_type == ENTRY_STAG){
+    else if(val->type == NODE_SYMTAB && ( ((struct symtab_entry_generic*)val)->st_type == ENTRY_STAG
+                || ((struct symtab_entry_generic*)val)->st_type == ENTRY_UTAG ) ){
         entry.generic->file = ((struct symtab_entry_generic*)val)->file;
         entry.generic->line = ((struct symtab_entry_generic*)val)->line;
         //Variable is of type struct, need to store pointer to struct in curr declaration for use with variable type
@@ -973,14 +1016,14 @@ void finalizeSpecs(union symtab_entry entry){
     }
 }
 
-struct astnode_fncndec* startFuncDef(bool params){
+struct astnode_fncndec* startFuncDef(bool params, struct LexVal *lexVal){
     struct astnode_fncndec *fncndec = (struct astnode_fncndec *) allocEntry(ENTRY_FNCN, false);
     
     fncndec->type = NODE_FNCNDEC;
     fncndec->unknown = true;
     fncndec->none = false;
     if(params){
-        fncndec->scope = (struct symtab_func*)symtabCreate(SCOPE_PROTO, TAB_FUNC);
+        fncndec->scope = (struct symtab_func*)symtabCreate(SCOPE_PROTO, TAB_FUNC, lexVal);
         fncndec->scope->parentFunc = fncndec;
         currDecl.generic = allocEntry(ENTRY_GENERIC, true);
     }
@@ -1178,7 +1221,7 @@ void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum){
 
     if(isTag){
         //Don't print incomplete forward definitions
-        char *structName;
+        char *structName, *structType;
         char *fileName = entry.generic->file;
         int line = entry.generic->line;
         if(entry.tag->ident == NULL)
@@ -1186,9 +1229,11 @@ void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum){
         else
             structName = entry.tag->ident->value.string_val;
 
+        structType = entry.tag->st_type == ENTRY_STAG ? "struct" : "union";
+
         if(entry.tag->complete){
-            printf("struct %s definition at %s:%d{\n",
-                   structName, fileName, line);
+            printf("%s %s definition at %s:%d{\n",
+                   structType, structName, fileName, line);
         }
         /*else{
             printf("struct %s definition at %s:%d (incomplete)\n",
@@ -1197,10 +1242,10 @@ void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum){
         return;
     }
 
-    printf("%s is defined at %s:%d [in %s scope] as a \n", entry.generic->ident->value.string_val,
-           entry.generic->file, entry.generic->line, scope);
+    printf("%s is defined at %s:%d [in %s scope starting at %s:%d] as a \n", entry.generic->ident->value.string_val,
+           entry.generic->file, entry.generic->line, scope, symtab->file, symtab->line);
     if(isMemb) {
-        char *structName;
+        char *structName, *structType;
         if (symtab->tabType != TAB_STRUCT) {
             fprintf(stderr, "Error: attempting to print member info with tab not of type TAB_STRUCT\n");
             structName = "";
@@ -1210,8 +1255,10 @@ void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum){
         else
             structName = "(anonymous)";
 
-        printf("field of struct %s  off=%zu bit_off=%d bit_wid=%d, type:\n  ",
-               structName, entry.memb->structOffset, entry.memb->bitOffset, entry.memb->bitWidth
+        structType = ((struct symtab_struct*)symtab)->parentStruct->st_type == ENTRY_STAG ? "struct" : "union";
+
+        printf("field of %s %s  off=%zu bit_off=%d bit_wid=%d, type:\n  ",
+               structType, structName, entry.memb->structOffset, entry.memb->bitOffset, entry.memb->bitWidth
         );
     }
     else if(isFunc)
@@ -1219,7 +1266,7 @@ void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum){
     else{
         printf("%s ", usage);
         if(argNum > 0 && symtab->scope == SCOPE_PROTO)
-            printf("(argument #%d) ", argNum);
+            printf("(argument #%ld) ", argNum);
 
         if(entry.generic->stgclass != -1)
             printf("with stgclass %s  ", storage);
@@ -1307,15 +1354,16 @@ void printSpec(struct astnode_spec_inter *next, struct symtab *symtab, bool func
     if (hasFlag(sflags, complex_type))
         printf(" _Complex");
     if (hasFlag(sflags, struct_type)){
-        char *structName, *structFile;
-        int line = 0;
+        char *structName, *structType;
         struct astnode_tag *tagNode = ((struct astnode_tag*)spec_node->type_specs->els[0]);
         if(tagNode->ident == NULL)
             structName = "(anonymous)";
         else
             structName = tagNode->ident->value.string_val;
 
-        printf("struct %s ", structName);
+        structType = tagNode->st_type == ENTRY_STAG ? "struct" : "union";
+
+        printf("%s %s ", structType, structName);
 
         struct astnode_tag *structDef = NULL;
         if(tagNode->ident == NULL) {
@@ -1399,11 +1447,13 @@ void printStruct(struct astnode_hdr *structHdr){
         currEntry = currEntry.generic->next;
     }
 
-    printf("} (size==%zu)\n\n", getStructSize(structNode));
+    printf("} (size==%zu)\n\n", getStructSize(structNode, false));
 }
 
-void finalizeStruct(struct astnode_hdr *structHdr){
+void finalizeStruct(struct astnode_hdr *structHdr, bool complete){
     struct astnode_tag *structNode = (struct astnode_tag*)structHdr;
+    structNode->complete = complete;
+
     if(structNode->complete && !structNode->namedEntry){
         fprintf(stderr, "flexible array member in struct with no named members");
         exit(-1);

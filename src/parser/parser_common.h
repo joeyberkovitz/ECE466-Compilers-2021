@@ -25,7 +25,7 @@ void addToList(struct astnode_lst *lst, struct astnode_hdr *el);
 
 struct astnode_hdr* allocFunc(struct astnode_hdr *name, struct astnode_lst *lst);
 size_t computeSizeof(struct astnode_hdr* el);
-size_t getStructSize(struct astnode_tag *structNode);
+size_t getStructSize(struct astnode_tag *structNode, bool ignoreIncomplete);
 
 enum tab_type {
     TAB_GENERIC,
@@ -197,6 +197,8 @@ struct symtab {
     struct symtab **children; //Array of pointers to direct children - dynamically allocated
     size_t numChildren; //Number of children pointers allocated
     union symtab_entry head;
+    char *file;
+    int line;
 };
 
 struct symtab_struct {
@@ -212,15 +214,17 @@ struct symtab_func {
 };
 
 size_t getTabSize(enum tab_type tabType);
-struct symtab* symtabCreate(enum symtab_scope scope, enum tab_type tabType);
+struct symtab* symtabCreate(enum symtab_scope scope, enum tab_type tabType, struct LexVal *startLex);
 //Traverse up to parent scope without destroying current scope (ex: for struct sym tables)
 void exitScope();
+void enterBlockScope(struct LexVal *lexVal);
+void enterFuncScope(struct astnode_hdr* func);
 void symtabDestroy(struct symtab *symtab);
 union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name, bool singleScope);
 bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace);
 bool structMembEnter(struct symtab *symtab, union symtab_entry entry);
 struct astnode_hdr* symCopyAndEnter(bool enter);
-struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union symtab_entry baseEntry, struct LexVal *ident, bool complete);
+struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union symtab_entry baseEntry, struct LexVal *ident, struct LexVal *scopeStart, bool complete);
 void checkVoid();
 int checkStructValidity();
 
@@ -235,14 +239,14 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val);
 void addTypeQual(enum qual_flag *qtype, struct astnode_lst *qual_types, struct LexVal *val, bool ptr);
 
 void finalizeSpecs(union symtab_entry entry);
-void finalizeStruct(struct astnode_hdr *structHdr);
+void finalizeStruct(struct astnode_hdr *structHdr, bool complete);
 
 struct astnode_ptr* allocPtr();
 struct astnode_spec_inter* setPtr(struct astnode_spec_inter *ptr, struct astnode_spec_inter *next);
 struct astnode_spec_inter* allocAry(struct astnode_spec_inter *prev, struct LexVal *val, union symtab_entry entry, struct symtab *symtab);
 void freeInterNodes();
 
-struct astnode_fncndec* startFuncDef(bool params);
+struct astnode_fncndec* startFuncDef(bool params, struct LexVal *lexVal);
 struct astnode_lst* startFncnArgs(struct astnode_hdr *arg);
 void addFncnArg(struct astnode_lst *lst, struct astnode_hdr *arg);
 struct astnode_spec_inter* setFncn(struct astnode_fncndec *fncndec, struct astnode_spec_inter *prev);

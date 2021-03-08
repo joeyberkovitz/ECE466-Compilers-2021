@@ -63,7 +63,7 @@
 %type  <hdr> postfix-expression
 %type  <lst> argument-expression-list
 %type  <hdr> unary-expression
-%type  <lexNode> '=' '&' '*' '+' '-' '~'
+%type  <lexNode> '=' '&' '*' '+' '-' '~' '{'
 %type  <lexNode> unary-operator
 %type  <hdr> cast-expression
 %type  <hdr> multiplicative-expression
@@ -118,8 +118,14 @@
 %initial-action {
     //Space to perform initialization actions at beginning of yyparse()
     //Init file scope symbol table here
-    currTab = symtabCreate(SCOPE_FILE, TAB_GENERIC);
+    extern char currFile[];
+    extern int currLine;
+    struct LexVal *initVal = malloc(sizeof(struct LexVal));
+    initVal->file = currFile;
+    initVal->line = currLine;
+    currTab = symtabCreate(SCOPE_FILE, TAB_GENERIC, initVal);
     currDecl.generic = allocEntry(ENTRY_GENERIC, true);
+    free(initVal);
 };
 
 
@@ -140,7 +146,7 @@ external-declaration:
     /* 6.9.1 - Function definitions */
     /* TODO: KR style definitions excluded from assg 3 */
 function-definition:
-        declaration-specifiers end-declaration-spec declarator compound-statement
+        declaration-specifiers end-declaration-spec declarator {enterFuncScope($3);} compound-statement
     ;
 
     /* 6.8 - Statements and blocks */
@@ -152,13 +158,13 @@ statement:
     /* 6.8.2 - Compound statements */
     /* TODO: deal with scopes */
 compound-statement:
-        '{' block-item-list '}'
-    |   '{' '}'
+        '{' {enterBlockScope($1);clearEntry(currDecl);} block-item-list '}'    {exitScope(); /*TODO: do we want to symtabDestroy here?*/}
+    |   '{' '}' {enterBlockScope($1); exitScope(); clearEntry(currDecl); /*Specifically for entering/exiting function scope*/}
     ;
 
 block-item-list:
-        block-item
-    |   block-item-list block-item
+        block-item                      {clearEntry(currDecl);}
+    |   block-item-list block-item      {clearEntry(currDecl);}
     ;
 
 block-item:
@@ -399,12 +405,12 @@ type-specifier:
     /* 6.7.2.1 - Struct/union specifiers */
 struct-or-union-specifier:
         struct-or-union '{'
-                {$<hdr>$=genStruct($1, currTab, currDecl, (struct LexVal*)NULL, true);}
-                struct-declaration-list '}'              {$<hdr>$ = $<hdr>3; finalizeStruct($$); printStruct($$); exitScope();}
+                {$<hdr>$=genStruct($1, currTab, currDecl, (struct LexVal*)NULL, $2, true);}
+                struct-declaration-list '}'              {$<hdr>$ = $<hdr>3; finalizeStruct($$, true); printStruct($$); exitScope();}
     |   struct-or-union IDENT '{'
-                {$<hdr>$=genStruct($1, currTab, currDecl, $2, true);}
-                struct-declaration-list '}'              {$<hdr>$ = $<hdr>4; finalizeStruct($$); printStruct($$); exitScope();}
-    |   struct-or-union IDENT                            {$$=genStruct($1, currTab, currDecl, $2, false); finalizeStruct($$);}
+                {$<hdr>$=genStruct($1, currTab, currDecl, $2, $3, true);}
+                struct-declaration-list '}'              {$<hdr>$ = $<hdr>4; finalizeStruct($$, true); printStruct($$); exitScope();}
+    |   struct-or-union IDENT                            {$$=genStruct($1, currTab, currDecl, $2, $2, false); finalizeStruct($$, false);}
     ;
 
 struct-or-union:
@@ -498,8 +504,8 @@ direct-declarator:
     ;
 
 start-func-subroutine:
-        {$<specInter>$ = (struct astnode_spec_inter*)currDecl.generic; startFuncDef(true);} parameter-type-list {free(currDecl.generic); currDecl.generic = (struct symtab_entry_generic*)$<specInter>1; exitScope(); $$ = $2;}
-    |   %empty  {$$ = startFuncDef(false);}
+        {$<specInter>$ = (struct astnode_spec_inter*)currDecl.generic; startFuncDef(true, $<lexNode>-1);} parameter-type-list {free(currDecl.generic); currDecl.generic = (struct symtab_entry_generic*)$<specInter>1; exitScope(); $$ = $2;}
+    |   %empty  {$$ = startFuncDef(false, $<lexNode>-1);}
     ;
 
 pointer:

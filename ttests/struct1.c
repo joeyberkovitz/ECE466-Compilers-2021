@@ -33,9 +33,9 @@ struct {
 	int :7;
 	unsigned d;
 	unsigned e:16;
-} s6;
+} s6;*/
 union u1 {
 	struct str4 str4;
 	struct str3 str3;
-} u1;*/
+} u1;
 
