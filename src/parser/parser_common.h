@@ -215,6 +215,8 @@ size_t getTabSize(enum tab_type tabType);
 struct symtab* symtabCreate(enum symtab_scope scope, enum tab_type tabType);
 //Traverse up to parent scope without destroying current scope (ex: for struct sym tables)
 void exitScope();
+void enterBlockScope();
+void enterFuncScope(struct astnode_hdr* func);
 void symtabDestroy(struct symtab *symtab);
 union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name, bool singleScope);
 bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace);

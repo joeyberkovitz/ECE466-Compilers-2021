@@ -140,7 +140,7 @@ external-declaration:
     /* 6.9.1 - Function definitions */
     /* TODO: KR style definitions excluded from assg 3 */
 function-definition:
-        declaration-specifiers end-declaration-spec declarator compound-statement
+        declaration-specifiers end-declaration-spec declarator {enterFuncScope($3);} compound-statement
     ;
 
     /* 6.8 - Statements and blocks */
@@ -152,13 +152,13 @@ statement:
     /* 6.8.2 - Compound statements */
     /* TODO: deal with scopes */
 compound-statement:
-        '{' block-item-list '}'
-    |   '{' '}'
+        '{' {enterBlockScope();clearEntry(currDecl);} block-item-list '}'    {exitScope(); /*TODO: do we want to symtabDestroy here?*/}
+    |   '{' '}' {enterBlockScope(); exitScope(); clearEntry(currDecl); /*Specifically for entering/exiting function scope*/}
     ;
 
 block-item-list:
-        block-item
-    |   block-item-list block-item
+        block-item                      {clearEntry(currDecl);}
+    |   block-item-list block-item      {clearEntry(currDecl);}
     ;
 
 block-item:
