@@ -466,8 +466,24 @@ void enterBlockScope(struct LexVal *lexVal){
 
 void enterFuncScope(struct astnode_hdr *func){
     struct astnode_fncndec *fncNode = (struct astnode_fncndec*)func;
+    if(fncNode->defined){
+        fprintf(stderr, "redefinition of function");
+        exit(-1);
+    }
+
+    // Edge case described in symtabEnter
+    if(fncNode->unknownCheck){
+        fprintf(stderr, "number of arguments does not match prototype");
+        exit(-1);
+    }
+    
+    if(fncNode->noIdent){
+        fprintf(stderr, "parameter name omitted");
+        exit(-1);
+    }
+
     currTab = (struct symtab*)(fncNode)->scope;
-    fncNode->unknown = false;
+    fncNode->defined = true;
 }
 
 void symtabDestroy(struct symtab *symtab){
@@ -515,7 +531,7 @@ union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *
     return symtabLookup(symtab->parent, ns, name, false);
 }
 
-bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
+struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
     //All non-struct/union member entries go in the parent scope
     if(symtab->scope == SCOPE_STRUCT && entry.generic->ns != MEMBER)
         return symtabEnter(symtab->parent, entry, replace);
@@ -542,26 +558,64 @@ bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
             goto success;
         }
         else{
-            fprintf(stderr, "Error: value already exists in symtab and replace not set, ignoring\n");
-            exit(EXIT_FAILURE);
+            if(existingVal.generic->linkage == LINK_NONE){
+                fprintf(stderr, "attemped redeclaration of identifier with no linkage");
+                exit(-1);
+            }
+            else if(!checkCompatibility((struct astnode_spec_inter*)existingVal.generic, (struct astnode_spec_inter*)entry.generic, symtab, true)){
+                fprintf(stderr, "conflicting types for identifier");
+                exit(-1);
+            }
+
+            // Set check for empty defn params but non-empty prior proto params
+            if(existingVal.generic->st_type == ENTRY_FNCN && entry.generic->st_type == ENTRY_FNCN){
+                if(!existingVal.fncn->unknown && entry.fncn->unknown)
+                    existingVal.fncn->unknownCheck = true;
+                else
+                    existingVal.fncn->unknownCheck = false;
+            }
         }
     }
 
-    //Insert element onto beginning of list
-    union symtab_entry oldHead = symtab->head;
-    symtab->head = entry;
-    entry.generic->prev.generic = NULL;
-    entry.generic->next = oldHead;
+    if((entry.generic->st_type != ENTRY_VAR && entry.generic->st_type != ENTRY_FNCN) || symtab->scope == SCOPE_PROTO || ((symtab->scope == SCOPE_BLOCK || symtab->scope == SCOPE_FUNC) && entry.generic->stgclass != STG_EXTERN))
+        entry.generic->linkage = LINK_NONE;
+    else if(entry.generic->stgclass == STG_STATIC && symtab->scope == SCOPE_FILE)
+        entry.generic->linkage = LINK_INT;
+    else if(entry.generic->stgclass == STG_EXTERN){
+        if(existingVal.generic != NULL)
+            entry.generic->linkage = existingVal.generic->linkage;
+        else
+            entry.generic->linkage = LINK_EXT;
+    }
+    else
+        entry.generic->linkage = LINK_EXT;
+
+    if(existingVal.generic != NULL && existingVal.generic->linkage != entry.generic->linkage){
+        fprintf(stderr, "attemped redeclaration of identifier with conflicting linkage");
+        exit(-1);
+    }
+
+    if(existingVal.generic == NULL){
+        //Insert element onto beginning of list
+        union symtab_entry oldHead = symtab->head;
+        symtab->head = entry;
+        entry.generic->prev.generic = NULL;
+        entry.generic->next = oldHead;
+    }
 
     success:
     //Struct/union members will have printing occur later
     //Function prototype will be printed at end of prototype
     if(entry.generic->ns != TAG && entry.generic->ns != MEMBER && symtab->scope != SCOPE_PROTO)
         printDecl(symtab, entry, 0);
-    return true;
+
+    if(existingVal.generic != NULL && !replace)
+        return existingVal.generic;
+    else
+        return entry.generic;
 }
 
-bool structMembEnter(struct symtab *symtab, union symtab_entry entry){
+struct symtab_entry_generic* structMembEnter(struct symtab *symtab, union symtab_entry entry){
     struct astnode_tag *structNode = ((struct symtab_struct*)symtab)->parentStruct;
     if(structNode->incAry){
         fprintf(stderr, "flexible array member not at end of struct");
@@ -584,12 +638,22 @@ bool structMembEnter(struct symtab *symtab, union symtab_entry entry){
         exit(-1);
     }
     if(a == 3){
-        fprintf(stderr, "Error: attempt to declare struct with member struct with flexible array member");
-        exit(-1);
+        if(structNode->st_type == ENTRY_UTAG)
+            structNode->incAry = true;
+        else{
+            fprintf(stderr, "Error: attempt to declare struct with member struct with flexible array member");
+            exit(-1);
+        }
     }
 
-    if(entry.generic->child->type == NODE_ARY && !((struct astnode_ary*)entry.generic->child)->complete)
+    if(entry.generic->child->type == NODE_ARY && !((struct astnode_ary*)entry.generic->child)->complete){
+        if(structNode->st_type == ENTRY_UTAG){
+            fprintf(stderr, "flexible array member in union");
+            exit(-1);
+        }
+
         structNode->incAry = true;
+    }
     else
         structNode->namedEntry = true;
 
@@ -633,7 +697,8 @@ struct astnode_hdr* symCopyAndEnter(bool enter){
         memcpy(fncndec, currDecl.generic, sizeof(struct symtab_entry_generic));
         fncndec->st_type = ENTRY_FNCN;
         fncndec->child = child;
-        fncndec->unknown = true;
+        fncndec->defined = false;
+        fncndec->unknownCheck = false;
         fncndec->ns = OTHER;
         entry = (union symtab_entry)fncndec;
     }
@@ -660,7 +725,7 @@ struct astnode_hdr* symCopyAndEnter(bool enter){
     }
 
     if(enter)
-        symtabEnter(currTab, entry, false);
+        entry.generic = symtabEnter(currTab, entry, false);
     
     freeInterNodes();
 
@@ -708,6 +773,118 @@ int checkStructValidity(){
     }
 
     return 0;
+}
+
+bool checkCompatibility(struct astnode_spec_inter *entry1, struct astnode_spec_inter *entry2, struct symtab *symtab, bool qual){
+    if(entry1->type != entry2->type)
+        return false;
+
+    switch(entry1->type){
+        case NODE_SYMTAB:
+            if(((struct symtab_entry_generic*)entry1)->st_type != ((struct symtab_entry_generic*)entry2)->st_type)
+                return false;
+
+            if(((struct symtab_entry_generic*)entry1)->st_type == ENTRY_VAR)
+                return checkCompatibility(entry1->child, entry2->child, symtab, qual);
+            else if(((struct symtab_entry_generic*)entry1)->st_type == ENTRY_FNCN)
+                return checkCompatibilityFncn((struct astnode_fncndec*)entry1, (struct astnode_fncndec*)entry2, symtab);
+        case NODE_PTR:
+            if(((struct astnode_ptr*)entry1)->qtype != ((struct astnode_ptr*)entry2)->qtype && qual)
+                return false;
+
+            return checkCompatibility(entry1->child, entry2->child, symtab, true);
+        case NODE_ARY:
+            if(((struct astnode_ary*)entry1)->complete && ((struct astnode_ary*)entry2)->complete && ((struct astnode_ary*)entry1)->length != ((struct astnode_ary*)entry2)->length)
+                return false;
+            // TODO: only creates composite array length when arrays are in same scope
+            else if(((struct astnode_ary*)entry2)->complete && !((struct astnode_ary*)entry1)->complete)
+                ((struct astnode_ary*)entry1)->length = ((struct astnode_ary*)entry2)->length;
+
+            return checkCompatibility(entry1->child, entry2->child, symtab, true);
+        case NODE_FNCNDEC:
+            return checkCompatibilityFncn((struct astnode_fncndec*)entry1, (struct astnode_fncndec*)entry2, symtab);
+        case NODE_TYPESPEC: ;
+            struct astnode_typespec *spec_node1 = (struct astnode_typespec*)entry1, *spec_node2 = (struct astnode_typespec*)entry2;
+            if(spec_node1->stype == void_type && spec_node2->stype != void_type)
+                return false;
+            if(hasFlag(spec_node1->stype,char_type) && spec_node1->stype != spec_node2->stype)
+                return false;
+            if(hasFlag(spec_node1->stype,sint_type)){
+                if(!hasFlag(spec_node2->stype,sint_type))
+                    return false;
+                else if((spec_node1->stype & unsigned_type) != (spec_node2->stype & unsigned_type))
+                    return false;
+            }
+            if((spec_node1->stype == int_type || spec_node1->stype == (int_type | signed_type)) && !(spec_node2->stype == int_type || spec_node2->stype == (int_type | signed_type)))
+                return false;
+            if(spec_node1->stype == (int_type | unsigned_type) && spec_node1->stype != spec_node2->stype)
+                return false;
+            if((spec_node1->stype == lint_type || spec_node1->stype == (lint_type | signed_type) || spec_node1->stype == (lint_type | int_type) || spec_node1->stype == (lint_type | int_type | signed_type)) && !(spec_node2->stype == lint_type || spec_node2->stype == (lint_type | signed_type) || spec_node2->stype == (lint_type | int_type) || spec_node2->stype == (lint_type | int_type | signed_type)))
+                return false;
+            if((spec_node1->stype == (lint_type | unsigned_type) || spec_node1->stype == (lint_type | int_type | unsigned_type)) && !(spec_node2->stype == (lint_type | unsigned_type) || spec_node2->stype == (lint_type | int_type | unsigned_type)))
+                return false;
+            if(hasFlag(spec_node1->stype,llint_type)){
+                if(!hasFlag(spec_node2->stype,llint_type))
+                    return false;
+                else if((spec_node1->stype & unsigned_type) != (spec_node2->stype & unsigned_type))
+                    return false;
+            }
+            if(spec_node1->stype == float_type && spec_node2->stype != float_type)
+                return false;
+            if(spec_node1->stype == double_type && spec_node2->stype != double_type)
+                return false;
+            if(spec_node1->stype == ldouble_type && spec_node2->stype != ldouble_type)
+                return false;
+            if(spec_node1->stype == bool_type && spec_node2->stype != bool_type)
+                return false;
+            if(spec_node1->stype == fcomplex_type && spec_node2->stype != fcomplex_type)
+                return false;
+            if(spec_node1->stype == dcomplex_type && spec_node2->stype != dcomplex_type)
+                return false;
+            if(spec_node1->stype == ldcomplex_type && spec_node2->stype != ldcomplex_type)
+                return false;
+            if(spec_node1->stype == struct_type){
+                if(spec_node2->stype != struct_type)
+                    return false;
+
+                struct astnode_tag *tagNode1 = ((struct astnode_tag*)spec_node1->type_specs->els[0]);
+                struct astnode_tag *tagNode2 = ((struct astnode_tag*)spec_node2->type_specs->els[0]);
+                if(tagNode1->ident == NULL || strcmp(tagNode1->ident->value.string_val, tagNode2->ident->value.string_val))
+                    return false;
+                
+                struct astnode_tag *structDef1 = symtabLookup(symtab, TAG, tagNode1->ident->value.string_val, false).tag;
+                struct astnode_tag *structDef2 = symtabLookup(symtab, TAG, tagNode2->ident->value.string_val, false).tag;
+
+                if(structDef1 != structDef2)
+                    return false;
+            }
+            
+            if(spec_node1->qtype != spec_node2->qtype && qual)
+                return false;
+
+            return true;
+    }
+}
+
+bool checkCompatibilityFncn(struct astnode_fncndec *entry1, struct astnode_fncndec *entry2, struct symtab *symtab){
+    if(entry1->defined && entry1->unknown && !entry2->unknown && !entry2->none){
+        fprintf(stderr, "number of arguments does not match prototype");
+        exit(-1);
+    }
+
+    // TODO: Compatibility with unknown params; need type promotions
+    if(!entry1->unknown && !entry2->unknown){
+        if(entry1->args->numVals != entry2->args->numVals || entry1->varArgs != entry2->varArgs)
+            return false;
+        else{
+            for(int i = 0; i < entry1->args->numVals; i++){
+                if(!checkCompatibility((struct astnode_spec_inter*)entry1->args->els[i], (struct astnode_spec_inter*)entry2->args->els[i], symtab, false))
+                    return false;
+            }
+        }
+    }
+
+    return checkCompatibility(entry1->child, entry2->child, symtab, true);
 }
 
 struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union symtab_entry baseEntry, struct LexVal *ident, struct LexVal *scopeStart, bool complete){
@@ -848,7 +1025,7 @@ void setStgSpec(union symtab_entry entry, struct symtab *symtab, struct LexVal *
 void handleStgDefaults(union symtab_entry entry, struct symtab *symtab){
     if((symtab->scope == SCOPE_FUNC || symtab->scope == SCOPE_BLOCK) && entry.generic->st_type != ENTRY_FNCN)
         entry.generic->stgclass = STG_AUTO;
-    else
+    else if(entry.generic->st_type == ENTRY_FNCN)
         entry.generic->stgclass = STG_EXTERN;
 }        
 
@@ -1016,15 +1193,18 @@ void finalizeSpecs(union symtab_entry entry){
     }
 }
 
-struct astnode_fncndec* startFuncDef(bool params, struct LexVal *lexVal){
+struct astnode_fncndec* startFuncDecl(bool params, struct LexVal *lexVal){
     struct astnode_fncndec *fncndec = (struct astnode_fncndec *) allocEntry(ENTRY_FNCN, false);
     
     fncndec->type = NODE_FNCNDEC;
+    fncndec->defined = false;
     fncndec->unknown = true;
+    fncndec->noIdent = false;
     fncndec->none = false;
+    fncndec->scope = (struct symtab_func*)symtabCreate(SCOPE_PROTO, TAB_FUNC, lexVal);
+    fncndec->scope->parentFunc = fncndec;
     if(params){
-        fncndec->scope = (struct symtab_func*)symtabCreate(SCOPE_PROTO, TAB_FUNC, lexVal);
-        fncndec->scope->parentFunc = fncndec;
+        fncndec->unknown = false;
         currDecl.generic = allocEntry(ENTRY_GENERIC, true);
     }
 
@@ -1033,8 +1213,10 @@ struct astnode_fncndec* startFuncDef(bool params, struct LexVal *lexVal){
 
 struct astnode_lst* startFncnArgs(struct astnode_hdr *arg){
     struct symtab_entry_generic *entry = (struct symtab_entry_generic*)arg;
-    if(entry->child == (struct astnode_spec_inter*)entry->type_spec && hasFlag(entry->type_spec->stype,void_type))
+    if(entry->child == (struct astnode_spec_inter*)entry->type_spec && hasFlag(entry->type_spec->stype,void_type)){
         ((struct symtab_func*)currTab)->parentFunc->none = true;
+        ((struct symtab_func*)currTab)->parentFunc->noIdent = false;
+    }
 
     clearEntry(currDecl);
 
@@ -1179,6 +1361,10 @@ void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum){
             storage = "auto"; break;
         case STG_REGISTER:
             storage = "register"; break;
+        default:
+            if(entry.generic->linkage == LINK_EXT)
+                storage = "extern";
+            break;
     }
 
     char *scope;
@@ -1268,7 +1454,7 @@ void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum){
         if(argNum > 0 && symtab->scope == SCOPE_PROTO)
             printf("(argument #%ld) ", argNum);
 
-        if(entry.generic->stgclass != -1)
+        if(entry.generic->stgclass != -1 || entry.generic->linkage == LINK_EXT)
             printf("with stgclass %s  ", storage);
 
         printf("of type\n  ");

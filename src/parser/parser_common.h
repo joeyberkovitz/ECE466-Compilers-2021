@@ -74,6 +74,12 @@ union symtab_entry {
     // TODO: labels
 };
 
+enum linkage_type {
+    LINK_EXT,
+    LINK_INT,
+    LINK_NONE
+};
+
 enum entry_spec_type {
     SPEC_STORAGE,
     SPEC_TYPE_SPEC,
@@ -104,14 +110,12 @@ struct symtab_entry_generic {
     struct LexVal *ident;
     char *file;
     int line;
+    enum linkage_type linkage;
 
     //Specifiers
     enum storage_class stgclass;
     struct LexVal *storageNode;
     struct astnode_typespec *type_spec;
-    /*struct astnode_hdr **typeSpec;
-    size_t numTypeSpec;
-    struct LexVal *typeQual;*/
 };
 
 struct astnode_var {
@@ -134,7 +138,10 @@ struct astnode_memb {
 struct astnode_fncndec {
     struct symtab_entry_generic;
 
-    bool unknown;
+    bool defined;
+    bool unknown; // note: defined && unknown = no params
+    bool unknownCheck; // for edge case check in symtabEnter
+    bool noIdent;
     bool none;
     bool varArgs;
     struct symtab_func *scope;
@@ -221,12 +228,14 @@ void enterBlockScope(struct LexVal *lexVal);
 void enterFuncScope(struct astnode_hdr* func);
 void symtabDestroy(struct symtab *symtab);
 union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name, bool singleScope);
-bool symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace);
-bool structMembEnter(struct symtab *symtab, union symtab_entry entry);
+struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace);
+struct symtab_entry_generic* structMembEnter(struct symtab *symtab, union symtab_entry entry);
 struct astnode_hdr* symCopyAndEnter(bool enter);
 struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union symtab_entry baseEntry, struct LexVal *ident, struct LexVal *scopeStart, bool complete);
 void checkVoid();
 int checkStructValidity();
+bool checkCompatibility(struct astnode_spec_inter *entry1, struct astnode_spec_inter *entry2, struct symtab *symtab, bool qual);
+bool checkCompatibilityFncn(struct astnode_fncndec *entry1, struct astnode_fncndec *entry2, struct symtab *symtab);
 
 struct symtab_entry_generic* allocEntry(enum symtab_type type, bool clear);
 struct symtab_entry_generic* clearEntry(union symtab_entry entry);
@@ -246,7 +255,7 @@ struct astnode_spec_inter* setPtr(struct astnode_spec_inter *ptr, struct astnode
 struct astnode_spec_inter* allocAry(struct astnode_spec_inter *prev, struct LexVal *val, union symtab_entry entry, struct symtab *symtab);
 void freeInterNodes();
 
-struct astnode_fncndec* startFuncDef(bool params, struct LexVal *lexVal);
+struct astnode_fncndec* startFuncDecl(bool params, struct LexVal *lexVal);
 struct astnode_lst* startFncnArgs(struct astnode_hdr *arg);
 void addFncnArg(struct astnode_lst *lst, struct astnode_hdr *arg);
 struct astnode_spec_inter* setFncn(struct astnode_fncndec *fncndec, struct astnode_spec_inter *prev);

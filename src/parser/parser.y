@@ -504,8 +504,8 @@ direct-declarator:
     ;
 
 start-func-subroutine:
-        {$<specInter>$ = (struct astnode_spec_inter*)currDecl.generic; startFuncDef(true, $<lexNode>-1);} parameter-type-list {free(currDecl.generic); currDecl.generic = (struct symtab_entry_generic*)$<specInter>1; exitScope(); $$ = $2;}
-    |   %empty  {$$ = startFuncDef(false, $<lexNode>-1);}
+        {$<specInter>$ = (struct astnode_spec_inter*)currDecl.generic; startFuncDecl(true, $<lexNode>-1);} parameter-type-list {free(currDecl.generic); currDecl.generic = (struct symtab_entry_generic*)$<specInter>1; exitScope(); $$ = $2;}
+    |   %empty  {$$ = startFuncDecl(false, $<lexNode>-1); exitScope();}
     ;
 
 pointer:
@@ -532,8 +532,8 @@ parameter-list:
 
 parameter-declaration:
         declaration-specifiers end-declaration-spec declarator          {$$ = $3;}
-    |   declaration-specifiers end-declaration-spec abstract-declarator {$$ = symCopyAndEnter(false);}
-    |   declaration-specifiers end-declaration-spec                     {$$ = symCopyAndEnter(false);}
+    |   declaration-specifiers end-declaration-spec abstract-declarator {((struct symtab_func*)currTab)->parentFunc->noIdent = true; $$ = symCopyAndEnter(false);}
+    |   declaration-specifiers end-declaration-spec                     {((struct symtab_func*)currTab)->parentFunc->noIdent = true; $$ = symCopyAndEnter(false);}
     ;
 
 /* K&R style functions ignored per assignment 3
