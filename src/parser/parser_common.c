@@ -526,7 +526,8 @@ union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *
         currEntry = nextEntry;
     }
 
-    if(singleScope)
+    //If scope is struct, then only members are in single scope. All others are in parent
+    if(singleScope && (symtab->scope != SCOPE_STRUCT || ns == MEMBER))
         return (union symtab_entry)(struct symtab_entry_generic*)NULL;
     return symtabLookup(symtab->parent, ns, name, false);
 }
@@ -559,7 +560,7 @@ struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_ent
         }
         else{
             if(existingVal.generic->linkage == LINK_NONE){
-                fprintf(stderr, "attemped redeclaration of identifier with no linkage");
+                fprintf(stderr, "attempted redeclaration of identifier with no linkage");
                 exit(-1);
             }
             else if(!checkCompatibility((struct astnode_spec_inter*)existingVal.generic, (struct astnode_spec_inter*)entry.generic, symtab, true)){
@@ -911,16 +912,14 @@ struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union 
 
         union symtab_entry existingEntry = symtabLookup(searchTab, TAG, ident->value.string_val, true);
 
-        //Only enter into symtab under two conditions:
-        //1. Existing entry not present
-        //2. Existing entry present, but not complete and current entry complete
-        if (existingEntry.generic == NULL || (!existingEntry.tag->complete && complete))
+        //Only enter into symtab if complete. If incomplete, will consider entering at end of declaration
+        if ((existingEntry.generic == NULL && complete) || (existingEntry.generic != NULL && !existingEntry.tag->complete && complete))
             symtabEnter(symtab, (union symtab_entry) structNode, true);
         else if (existingEntry.generic != NULL && existingEntry.tag->complete && complete) {
             fprintf(stderr, "Attempted redeclaration of struct %s failed\n", ident->value.string_val);
             exit(EXIT_FAILURE);
         }
-        else{
+        else if(existingEntry.generic != NULL){
             structNode->incAry = existingEntry.tag->incAry;
             structNode->namedEntry = existingEntry.tag->namedEntry;
         }
@@ -984,6 +983,30 @@ struct symtab_entry_generic* clearEntry(union symtab_entry entry){
     entry.generic->child = (struct astnode_spec_inter*)spec_node;
     entry.generic->type_spec = spec_node;
     return entry.generic;
+}
+
+void checkDeclDoesStuff(union symtab_entry decl){
+    if(decl.generic->type == NODE_SYMTAB){
+        struct astnode_tag *tagNode = NULL;
+        for(int i = 0; i < decl.generic->type_spec->type_specs->numVals; i++){
+            struct astnode_hdr *currNode = decl.generic->type_spec->type_specs->els[i];
+            if(currNode->type == NODE_SYMTAB &&
+                    (((struct symtab_entry_generic*)currNode)->st_type == ENTRY_STAG ||
+                            ((struct symtab_entry_generic*)currNode)->st_type == ENTRY_UTAG)) {
+                tagNode = (struct astnode_tag *) currNode;
+                break;
+            }
+        }
+
+        if(tagNode != NULL && tagNode->ident != NULL){
+            union symtab_entry existingNode = symtabLookup(currTab, TAG, tagNode->ident->value.string_val, true);
+            if(existingNode.generic == NULL)
+                symtabEnter(currTab, (union symtab_entry)tagNode, false);
+            return;
+        }
+    }
+
+    fprintf(stderr, "Error at %s:%d: declaration is useless\n", decl.generic->file, decl.generic->line);
 }
 
 void setStgSpec(union symtab_entry entry, struct symtab *symtab, struct LexVal *val){
@@ -1636,8 +1659,19 @@ void printStruct(struct astnode_hdr *structHdr){
     printf("} (size==%zu)\n\n", getStructSize(structNode, false));
 }
 
-void finalizeStruct(struct astnode_hdr *structHdr, bool complete){
+void finalizeStruct(struct astnode_hdr *structHdr, struct symtab *searchTab, bool complete){
     struct astnode_tag *structNode = (struct astnode_tag*)structHdr;
+    if(complete && structNode->ident != NULL) {
+        union symtab_entry existingEntry = symtabLookup(searchTab, TAG, structNode->ident->value.string_val, true);
+        if(existingEntry.generic != NULL &&
+            (existingEntry.generic->st_type == ENTRY_STAG || existingEntry.generic->st_type == ENTRY_UTAG)
+            && existingEntry.tag->complete){
+            fprintf(stderr, "Error at %s:%d: attempting to set struct/union as complete with existing complete value present\n",
+                    structNode->file, structNode->line);
+            exit(EXIT_FAILURE);
+        }
+    }
+
     structNode->complete = complete;
 
     if(structNode->complete && !structNode->namedEntry){

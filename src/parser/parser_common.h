@@ -239,6 +239,7 @@ bool checkCompatibilityFncn(struct astnode_fncndec *entry1, struct astnode_fncnd
 
 struct symtab_entry_generic* allocEntry(enum symtab_type type, bool clear);
 struct symtab_entry_generic* clearEntry(union symtab_entry entry);
+void checkDeclDoesStuff(union symtab_entry decl);
 size_t getEntrySize(enum symtab_type type);
 
 void setStgSpec(union symtab_entry entry, struct symtab *symtab, struct LexVal *val);
@@ -248,7 +249,7 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val);
 void addTypeQual(enum qual_flag *qtype, struct astnode_lst *qual_types, struct LexVal *val, bool ptr);
 
 void finalizeSpecs(union symtab_entry entry);
-void finalizeStruct(struct astnode_hdr *structHdr, bool complete);
+void finalizeStruct(struct astnode_hdr *structHdr, struct symtab *searchTab, bool complete);
 
 struct astnode_ptr* allocPtr();
 struct astnode_spec_inter* setPtr(struct astnode_spec_inter *ptr, struct astnode_spec_inter *next);

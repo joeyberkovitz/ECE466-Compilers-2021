@@ -343,7 +343,7 @@ primary-expression:
     /* 6.7 - Declarations */
 declaration:
         declaration-specifiers end-declaration-spec  init-declarator-list ';'     {clearEntry(currDecl);}
-    |   declaration-specifiers end-declaration-spec ';'                           {clearEntry(currDecl);}
+    |   declaration-specifiers end-declaration-spec ';'                           {checkDeclDoesStuff(currDecl);clearEntry(currDecl);}
     ;
 
 end-declaration-spec:
@@ -406,11 +406,11 @@ type-specifier:
 struct-or-union-specifier:
         struct-or-union '{'
                 {$<hdr>$=genStruct($1, currTab, currDecl, (struct LexVal*)NULL, $2, true);}
-                struct-declaration-list '}'              {$<hdr>$ = $<hdr>3; finalizeStruct($$, true); printStruct($$); exitScope();}
+                struct-declaration-list '}'              {$<hdr>$ = $<hdr>3; finalizeStruct($$, currTab, true); printStruct($$); exitScope();}
     |   struct-or-union IDENT '{'
                 {$<hdr>$=genStruct($1, currTab, currDecl, $2, $3, true);}
-                struct-declaration-list '}'              {$<hdr>$ = $<hdr>4; finalizeStruct($$, true); printStruct($$); exitScope();}
-    |   struct-or-union IDENT                            {$$=genStruct($1, currTab, currDecl, $2, $2, false); finalizeStruct($$, false);}
+                struct-declaration-list '}'              {$<hdr>$ = $<hdr>4; finalizeStruct($$, currTab, true); printStruct($$); exitScope();}
+    |   struct-or-union IDENT                            {$$=genStruct($1, currTab, currDecl, $2, $2, false); finalizeStruct($$, currTab, false);}
     ;
 
 struct-or-union:
