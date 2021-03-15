@@ -104,14 +104,8 @@
 %type  <fncndec> parameter-type-list
 %type  <lst> parameter-list
 %type  <hdr> parameter-declaration
-//%type  <hdr> identifier-list
 %type  <hdr> type-name
 %type  <specInter> direct-abstract-declarator
-%type  <hdr> initializer
-%type  <hdr> initializer-list
-%type  <hdr> designation
-%type  <hdr> designator-list
-%type  <hdr> designator
 %type  <fncndec> start-func-subroutine
 
 
@@ -321,9 +315,6 @@ postfix-expression:
     |   postfix-expression INDSEL IDENT                     {$3->sym = IDENT; $$ = allocBinop(allocUnop($1, '*'), (struct astnode_hdr*)$3, '.');}
     |   postfix-expression PLUSPLUS                         {$$ = allocUnop($1, PLUSPLUS);}
     |   postfix-expression MINUSMINUS                       {$$ = allocUnop($1, MINUSMINUS);}
-        /* TODO: compound literals; once we have type-names */
-    |   '(' type-name ')' '{' initializer-list '}'
-    |   '(' type-name ')' '{' initializer-list ',' '}'
 ;
 
 argument-expression-list:
@@ -362,7 +353,6 @@ declaration-specifier:
         storage-class-specifier     {setStgSpec(currDecl, currTab, $1);}
     |   type-specifier              {addTypeSpec(currDecl, $1);}
     |   type-qualifier              {addTypeQual(&currDecl.generic->type_spec->qtype, currDecl.generic->type_spec->type_quals, $1, false);}
-    /* TODO: ignored for assign 3: |   function-specifier */
     ;
 
 init-declarator-list:
@@ -372,8 +362,7 @@ init-declarator-list:
 
 init-declarator:
         declarator
-    /* TODO: initialized declarator skipped for assignment 3: |   declarator '=' initializer */
-    ;
+        ;
 
     /* 6.7.1 - Storage class specifiers */
 storage-class-specifier:
@@ -398,8 +387,6 @@ type-specifier:
     |   _BOOL       {RETHDR($1,$$)}
     |   _COMPLEX    {RETHDR($1,$$)}
     |   struct-or-union-specifier {$$ = $1;}
-    /* TODO: ignored here: |   enum-specifier */
-    /* TODO: Ignored here: |   typedef-name */
     ;
 
     /* 6.7.2.1 - Struct/union specifiers */
@@ -445,28 +432,7 @@ struct-declarator-list:
 
 struct-declarator:
         declarator
-    /* TODO: not supporting bitfields |   declarator ':' constant-expression */
     ;
-
-    /* 6.7.2.2 - Enum Specifiers */
-    /* Ignored for assign 3
-enum-specifier:
-        ENUM IDENT '{' enumerator-list '}'
-    |   ENUM '{' enumerator-list '}'
-    |   ENUM IDENT '{' enumerator-list ',' '}'
-    |   ENUM '{' enumerator-list ',' '}'
-    |   ENUM IDENT
-    ;
-
-enumerator-list:
-        enumerator
-    |   enumerator-list ',' enumerator
-    ;
-
-enumerator:
-        enumeration-constant
-    |   enumeration-constant '=' constant-expression
-    ; */
 
     /* 6.7.3 - Type Qualifiers */
 type-qualifier:
@@ -474,13 +440,6 @@ type-qualifier:
     |   RESTRICT    {$$ = $1;}
     |   VOLATILE    {$$ = $1;}
     ;
-
-
-    /* 6.7.4 - Function Specifiers */
-/* TODO: Ignored  for assign 3
-function-specifier:
-    INLINE
-; */
 
     /* 6.7.5 - Declarators */
 declarator:
@@ -499,8 +458,6 @@ direct-declarator:
     |   direct-declarator '[' NUMBER ']'                {$$ = allocAry($1, $3, currDecl, currTab);}
     |   direct-declarator '[' ']'                       {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab);}
     |   direct-declarator '(' start-func-subroutine ')' {$$ = setFncn($3, $1);}
-    /* K&R style functions ignored per assignment 3
-    |   direct-declarator '(' start-func-subroutine identifier-list ')'*/
     ;
 
 start-func-subroutine:
@@ -536,12 +493,6 @@ parameter-declaration:
     |   declaration-specifiers end-declaration-spec                     {((struct symtab_func*)currTab)->parentFunc->noIdent = true; $$ = symCopyAndEnter(false);}
     ;
 
-/* K&R style functions ignored per assignment 3
-identifier-list:
-        IDENT
-    |   identifier-list ',' IDENT
-    ; */
-
     /* 6.7.6 - Type names */
 type-name:
         specifier-qualifier-list
@@ -564,34 +515,5 @@ direct-abstract-declarator:
     |   direct-abstract-declarator '(' start-func-subroutine ')' {$$ = setFncn($3, $1);}
     |   '(' start-func-subroutine ')'                            {$$ = setFncn($2, (struct astnode_spec_inter*)currDecl.generic);}
     ;
-
-    /*6.7.8 - Initialization */
-initializer:
-        assignment-expression
-    |   '{' initializer-list '}'
-    |   '{' initializer-list ',' '}'
-    ;
-
-initializer-list:
-        designation initializer
-    |   initializer
-    |   initializer-list ',' designation initializer
-    |   initializer-list ',' initializer
-    ;
-
-designation:
-        designator-list '='
-    ;
-
-designator-list:
-        designator
-    |   designator-list designator
-    ;
-
-designator:
-        '[' constant-expression ']'
-    |   '.' IDENT
-    ;
-
 
 %% /* Code */
