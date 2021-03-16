@@ -1,8 +1,8 @@
 /* C Parser */
 
 %{
-	#include "parser_common.h"
-	#include "lexer/lexer_common.h"
+    #include "parser_common.h"
+    #include "lexer/lexer_common.h"
     #define RETHDR(in,out) out=(struct astnode_hdr*)in;
 %}
 //For debugging
@@ -138,8 +138,8 @@ external-declaration:
     ;
 
     /* 6.9.1 - Function definitions */
-    /* TODO: KR style definitions excluded from assg 3 */
 function-definition:
+    /* KR style definitions excluded from compiler */
         declaration-specifiers end-declaration-spec declarator {enterFuncScope($3);} compound-statement
     ;
 
@@ -150,9 +150,8 @@ statement:
     ;
 
     /* 6.8.2 - Compound statements */
-    /* TODO: deal with scopes */
 compound-statement:
-        '{' {enterBlockScope($1);clearEntry(currDecl);} block-item-list '}'    {exitScope(); /*TODO: do we want to symtabDestroy here?*/}
+        '{' {enterBlockScope($1);clearEntry(currDecl);} block-item-list '}'    {exitScope();}
     |   '{' '}' {enterBlockScope($1); exitScope(); clearEntry(currDecl); /*Specifically for entering/exiting function scope*/}
     ;
 
@@ -172,12 +171,11 @@ expression-statement:
     |   expression ';'            {printAst($1, 0);}
     ;
 
-    /* TODO: 6.6 - Constant expressions; once we do declarations */
+    /* TODO: 6.6 - Constant expressions; once we do statements */
     /* 6.6 - constant expressions */
 constant-expression:
         conditional-expression
     ;
-
 
     /* 6.5.17 - Comma expressions */
 expression:
@@ -306,6 +304,7 @@ unary-operator:
 
     /* 6.5.2 - Postfix expressions */
 postfix-expression:
+    /* compound literals excluded from compiler */
         primary-expression                                  {$$ = $1;}
         /* TODO: check types; Array subscripting: $1 should be pointer, $3 should be offset */
     |   postfix-expression '[' expression ']'               {$$ = allocBinop($1, $3, '+');}
@@ -348,8 +347,6 @@ declaration-specifiers:
     ;
 
 declaration-specifier:
-    /* TODO: ensure at most one of each */
-    /* TODO: adjustment made from spec - converted to list - check this is valid */
         storage-class-specifier     {setStgSpec(currDecl, currTab, $1);}
     |   type-specifier              {addTypeSpec(currDecl, $1);}
     |   type-qualifier              {addTypeQual(&currDecl.generic->type_spec->qtype, currDecl.generic->type_spec->type_quals, $1, false);}
@@ -361,8 +358,9 @@ init-declarator-list:
     ;
 
 init-declarator:
+    /* initializers excluded from compiler */
         declarator
-        ;
+    ;
 
     /* 6.7.1 - Storage class specifiers */
 storage-class-specifier:
@@ -375,6 +373,7 @@ storage-class-specifier:
 
     /* 6.7.2 - Type specifiers */
 type-specifier:
+    /* enum-specifier and typedef-name excluded from compiler */
         VOID        {RETHDR($1,$$)}
     |   CHAR        {RETHDR($1,$$)}
     |   SHORT       {RETHDR($1,$$)}
@@ -415,7 +414,7 @@ struct-declaration:
     ;
 
 specifier-qualifier-list:
-    /* TODO: not per spec */
+    /* not per spec */
         specifier-qualifier
     |   specifier-qualifier-list specifier-qualifier
     ;
@@ -431,8 +430,11 @@ struct-declarator-list:
     ;
 
 struct-declarator:
+    /* bit fields excluded from compiler */
         declarator
     ;
+
+    /* 6.7.2.2 - Enumeration specifiers excluded from compiler */
 
     /* 6.7.3 - Type Qualifiers */
 type-qualifier:
@@ -440,6 +442,8 @@ type-qualifier:
     |   RESTRICT    {$$ = $1;}
     |   VOLATILE    {$$ = $1;}
     ;
+
+    /* 6.7.4 - Function specifiers excluded from compiler */
 
     /* 6.7.5 - Declarators */
 declarator:
@@ -454,7 +458,7 @@ sub-declarator:
 direct-declarator:
         IDENT                                           {currDecl.generic->ident = $1; $$ = (struct astnode_spec_inter*)currDecl.generic;}
     |   '(' sub-declarator ')'                          {$$ = currDecl.generic->type_spec->parent;}
-    /* Not per spec, adjusted per assignment 3 */
+    /* Not per spec, adjusted per assignment 3 - only NUMBER or empty array size, no KR style declarations */
     |   direct-declarator '[' NUMBER ']'                {$$ = allocAry($1, $3, currDecl, currTab);}
     |   direct-declarator '[' ']'                       {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab);}
     |   direct-declarator '(' start-func-subroutine ')' {$$ = setFncn($3, $1);}
@@ -507,7 +511,7 @@ abstract-declarator:
 
 direct-abstract-declarator:
         '(' abstract-declarator ')'                              {$$ = currDecl.generic->type_spec->parent;}
-    /* Not per spec, adjusted per assignment 3 */
+    /* Not per spec, adjusted per assignment 3 - only NUMBER or empty array size, no KR style declarations */
     |   direct-abstract-declarator '[' NUMBER ']'                {$$ = allocAry($1, $3, currDecl, currTab);}
     |   '[' NUMBER ']'                                           {$$ = allocAry((struct astnode_spec_inter*)currDecl.generic, $2, currDecl, currTab);}
     |   direct-abstract-declarator '[' ']'                       {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab);}
@@ -515,5 +519,9 @@ direct-abstract-declarator:
     |   direct-abstract-declarator '(' start-func-subroutine ')' {$$ = setFncn($3, $1);}
     |   '(' start-func-subroutine ')'                            {$$ = setFncn($2, (struct astnode_spec_inter*)currDecl.generic);}
     ;
+
+    /* 6.7.7 - Type definitions excluded from compiler */
+
+    /* 6.7.8 - Initialization excluded from compiler */
 
 %% /* Code */

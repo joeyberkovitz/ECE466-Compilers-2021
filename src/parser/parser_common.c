@@ -318,7 +318,6 @@ struct symtab* symtabCreate(enum symtab_scope scope, enum tab_type tabType, stru
 
     if(currTab != NULL){
         currTab->numChildren++;
-        //TODO: assuming this won't fail
         currTab->children = realloc(currTab->children, sizeof(struct symtab*) * currTab->numChildren);
         if(currTab->children == NULL){
             fprintf(stderr, "%s:%d: Error: unknown error occurred\n", startLex->file, startLex->line);
@@ -371,92 +370,6 @@ void enterFuncScope(struct astnode_hdr *func){
     currTab = (struct symtab*)(fncNode)->scope;
 }
 
-void symtabDestroy(struct symtab *symtab){
-    if(symtab->numChildren > 0){
-        fprintf(stderr, "%s:%d Warning: symtab being destroyed has children which will also be destroyed\n", currFile, currLine);
-        for(int i = 0; i < symtab->numChildren; i++){
-            symtabDestroy(symtab->children[i]);
-        }
-        free(symtab->children);
-    }
-
-    struct symtab *nextTab = symtab->parent;
-
-    union symtab_entry currEntry = symtab->head;
-    union symtab_entry nextEntry;
-    while(currEntry.generic != NULL){
-        nextEntry = currEntry.generic->next;
-        freeEntry(currEntry);
-        currEntry = nextEntry;
-    }
-
-    free(symtab);
-
-    currTab = nextTab;
-}
-
-void freeEntry(union symtab_entry entry){
-    switch(entry.generic->st_type){
-        // TODO: labels
-        case ENTRY_FNCN:
-            freeFncn(entry.fncn);
-        case ENTRY_GENERIC:
-        case ENTRY_VAR:
-        case ENTRY_SMEM:
-        case ENTRY_UMEM:
-            ;
-            struct astnode_spec_inter *nextInter = entry.generic->child;
-            while(nextInter != NULL){
-                struct astnode_spec_inter *currInter = nextInter;
-                nextInter = currInter->child;
-                switch(currInter->type){
-                    case NODE_ARY:
-                        break;
-                    case NODE_PTR:
-                        for(int i = 0; i < ((struct astnode_ptr*)currInter)->type_quals->numVals; i++)
-                            free(((struct astnode_ptr*)currInter)->type_quals->els[i]);
-
-                        break;
-                    case NODE_FNCNDEC:
-                        freeFncn((struct astnode_fncndec*)currInter);
-                        break;
-                    case NODE_TYPESPEC:
-                        if(--((struct astnode_typespec*)currInter)->numParents == 0){
-                            for(int i = 0; i < ((struct astnode_typespec*)currInter)->type_specs->numVals; i++)
-                                free(((struct astnode_typespec*)currInter)->type_specs->els[i]);
-
-                            for(int i = 0; i < ((struct astnode_typespec*)currInter)->type_quals->numVals; i++)
-                                free(((struct astnode_typespec*)currInter)->type_quals->els[i]);
-                        }
-                        else
-                            continue;
-
-                        break;
-                }
-
-                free(currInter);
-            }
-
-            break;
-        case ENTRY_STAG:
-        case ENTRY_UTAG:
-            symtabDestroy(entry.tag->container);
-            break;
-    }
-
-    free(entry.generic->ident);
-    if(entry.generic->stgclass != -1)
-        free(entry.generic->storageNode);
-
-    free(entry.generic);
-}
-
-void freeFncn(struct astnode_fncndec *fncNode){
-    symtabDestroy((struct symtab*)fncNode->scope);
-    for(int i = 0; i < fncNode->args->numVals; i++)
-        freeEntry((union symtab_entry)(struct symtab_entry_generic*)fncNode->args->els[i]);
-}
-
 union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name, bool singleScope){
     if(symtab == NULL)
         return (union symtab_entry)(struct symtab_entry_generic*)NULL;
@@ -506,7 +419,7 @@ struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_ent
         }
         else{
             if(existingVal.generic->linkage == LINK_NONE){
-                fprintf(stderr, "%s:%d: Error: attempted redeclaration of '%s' with no linkage\n", entry.generic->file, entry.generic->line, entry.generic->ident->value.string_val);
+                fprintf(stderr, "%s:%d: Error: redeclaration of '%s' with no linkage\n", entry.generic->file, entry.generic->line, entry.generic->ident->value.string_val);
                 exit(EXIT_FAILURE);
             }
             else if(!checkCompatibility((struct astnode_spec_inter*)existingVal.generic, (struct astnode_spec_inter*)entry.generic, symtab, true)){
@@ -803,6 +716,7 @@ bool checkCompatibility(struct astnode_spec_inter *entry1, struct astnode_spec_i
             if(spec_node1->stype == ldcomplex_type && spec_node2->stype != ldcomplex_type)
                 return false;
             if(spec_node1->stype == struct_type){
+                // TODO: structs in separate translation units: can be different defs but tags, membs, order (if struct), memb names must be compatible if both complete, if both incomplete only tags have to be the same (6.2.7 1)
                 if(spec_node2->stype != struct_type)
                     return false;
 
@@ -837,7 +751,7 @@ bool checkCompatibilityFncn(struct astnode_fncndec *entry1, struct astnode_fncnd
             return false;
         else{
             for(int i = 0; i < entry1->args->numVals; i++){
-                if(!checkCompatibility((struct astnode_spec_inter*)entry1->args->els[i], (struct astnode_spec_inter*)entry2->args->els[i], symtab, false))
+                if(!checkCompatibility((struct astnode_spec_inter*)entry2->args->els[i], (struct astnode_spec_inter*)entry1->args->els[i], symtab, false))
                     return false;
 
                 // keep resaving the param names if func not defined yet, decl w/o def param names don't matter
@@ -899,6 +813,32 @@ struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union 
     return (struct astnode_hdr*)structNode;
 }
 
+void finalizeStruct(struct astnode_hdr *structHdr, struct symtab *searchTab, bool complete){
+    struct astnode_tag *structNode = (struct astnode_tag*)structHdr;
+    if(complete && structNode->ident != NULL) {
+        union symtab_entry existingEntry = symtabLookup(searchTab, TAG, structNode->ident->value.string_val, true);
+        if(existingEntry.generic != NULL &&
+            (existingEntry.generic->st_type == ENTRY_STAG || existingEntry.generic->st_type == ENTRY_UTAG)
+            && existingEntry.tag->complete){
+            fprintf(stderr, "%s:%d: Error: attempting to set struct/union as complete with existing complete value present\n",
+                    structNode->file, structNode->line);
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    structNode->complete = complete;
+
+    if(structNode->complete && !structNode->namedEntry){
+        fprintf(stderr, "%s:%d: Error: flexible array member in struct with no named members\n", structNode->file, structNode->line);
+        exit(EXIT_FAILURE);
+    }
+
+    currDecl.generic->stgclass = structNode->stgclass;
+    currDecl.generic->storageNode = structNode->storageNode;
+    currDecl.generic->type_spec->qtype = structNode->type_spec->qtype;
+    currDecl.generic->type_spec->type_quals = structNode->type_spec->type_quals;
+}
+
 size_t getEntrySize(enum symtab_type type){
     switch (type) {
         case ENTRY_GENERIC:
@@ -935,7 +875,6 @@ struct symtab_entry_generic* clearEntry(union symtab_entry entry){
     enum node_type nodeType = entry.generic->type;
     enum symtab_type type = entry.generic->st_type;
     size_t size = getEntrySize(type);
-    //TODO: potential memory leak due to un-freed elements in the entry
     memset(entry.generic, 0, size);
     entry.generic->st_type = type;
     entry.generic->stgclass = -1;
@@ -979,17 +918,17 @@ void checkDeclDoesStuff(union symtab_entry decl){
 }
 
 void setStgSpec(union symtab_entry entry, struct symtab *symtab, struct LexVal *val){
-    // TODO: stgclass of struct variable applies to all members
+    // TODO: stgclass of struct VARIABLE applies to all members
     if(entry.generic->stgclass == -1){
         if(symtab->scope == SCOPE_FILE && (val->sym == AUTO || val->sym == REGISTER)){
-            fprintf(stderr, "no auto or register in file scope");
-            exit(-1);
+            fprintf(stderr, "%s:%d: Error: file-scope declaration specifies '%s'\n", val->file, val->line, val->sym == AUTO ? "auto" : "register");
+            exit(EXIT_FAILURE);
         }
 
-        // TODO: ensure register is ignored if func decl
+        // note that register is eventually ignored if func decl
         if(symtab->scope == SCOPE_PROTO && val->sym != REGISTER){
-            fprintf(stderr, "only register in parameters");
-            exit(-1);
+            fprintf(stderr, "%s:%d: Error: only register allowed in parameters\n", val->file, val->line);
+            exit(EXIT_FAILURE);
         }
 
         switch(val->sym){
@@ -1008,9 +947,8 @@ void setStgSpec(union symtab_entry entry, struct symtab *symtab, struct LexVal *
         entry.generic->storageNode = val;
     }
     else{
-        // TODO: proper error recovery
-        fprintf(stderr, "cannot have multiple storage classes");
-        exit(-1);
+        fprintf(stderr, "%s:%d: Error: multiple storage classes in declaration specifiers\n", val->file, val->line);
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -1035,10 +973,9 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
         entry.generic->line = ((struct LexVal*)val)->line;
         switch (((struct LexVal*)val)->sym) {
             case VOID:
-                /* TODO: checks on void */
                 if (flag != 0) {
-                    fprintf(stderr, "invalid type specifier: VOID");
-                    exit(-1);
+                    fprintf(stderr, "%s:%d: Error: invalid type specifier: VOID\n", entry.generic->file, entry.generic->line);
+                    exit(EXIT_FAILURE);
                 }
                 addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, void_type);
                 break;
@@ -1046,8 +983,8 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
                 if (flag == 0 || flag == signed_type || flag == unsigned_type)
                     addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, char_type);
                 else {
-                    fprintf(stderr, "invalid type specifier: CHAR");
-                    exit(-1);
+                    fprintf(stderr, "%s:%d: Error: invalid type specifier: CHAR\n", entry.generic->file, entry.generic->line);
+                    exit(EXIT_FAILURE);
                 }
                 break;
             case SHORT:
@@ -1055,8 +992,8 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
                     flag == (int_type | signed_type) || flag == uint_type)
                     addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, sint_type);
                 else {
-                    fprintf(stderr, "invalid type specifier: SHORT");
-                    exit(-1);
+                    fprintf(stderr, "%s:%d: Error: invalid type specifier: SHORT\n", entry.generic->file, entry.generic->line);
+                    exit(EXIT_FAILURE);
                 }
                 break;
             case INT:
@@ -1066,8 +1003,8 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
                     flag == (llint_type | signed_type) || flag == ullint_type)
                     addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, int_type);
                 else {
-                    fprintf(stderr, "invalid type specifier: INT");
-                    exit(-1);
+                    fprintf(stderr, "%s:%d: Error: invalid type specifier: INT\n", entry.generic->file, entry.generic->line);
+                    exit(EXIT_FAILURE);
                 }
                 break;
             case LONG:
@@ -1081,24 +1018,24 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
                     spec_node->stype &= ~lint_type;
                     addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, llint_type);
                 } else {
-                    fprintf(stderr, "invalid type specifier: LONG");
-                    exit(-1);
+                    fprintf(stderr, "%s:%d: Error: invalid type specifier: LONG\n", entry.generic->file, entry.generic->line);
+                    exit(EXIT_FAILURE);
                 }
                 break;
             case FLOAT:
                 if (flag == 0 || flag == complex_type)
                     addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, float_type);
                 else {
-                    fprintf(stderr, "invalid type specifier: FLOAT");
-                    exit(-1);
+                    fprintf(stderr, "%s:%d: Error: invalid type specifier: FLOAT\n", entry.generic->file, entry.generic->line);
+                    exit(EXIT_FAILURE);
                 }
                 break;
             case DOUBLE:
                 if (flag == 0 || flag == lint_type || flag == complex_type || flag == (complex_type | lint_type))
                     addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, double_type);
                 else {
-                    fprintf(stderr, "invalid type specifier: DOUBLE");
-                    exit(-1);
+                    fprintf(stderr, "%s:%d: Error: invalid type specifier: DOUBLE\n", entry.generic->file, entry.generic->line);
+                    exit(EXIT_FAILURE);
                 }
                 break;
             case SIGNED:
@@ -1107,8 +1044,8 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
                     flag == (llint_type | int_type))
                     addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, signed_type);
                 else {
-                    fprintf(stderr, "invalid type specifier: SIGNED");
-                    exit(-1);
+                    fprintf(stderr, "%s:%d: Error: invalid type specifier: SIGNED\n", entry.generic->file, entry.generic->line);
+                    exit(EXIT_FAILURE);
                 }
                 break;
             case UNSIGNED:
@@ -1117,14 +1054,14 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
                     flag == (llint_type | int_type))
                     addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, unsigned_type);
                 else {
-                    fprintf(stderr, "invalid type specifier: UNSIGNED");
-                    exit(-1);
+                    fprintf(stderr, "%s:%d: Error: invalid type specifier: UNSIGNED\n", entry.generic->file, entry.generic->line);
+                    exit(EXIT_FAILURE);
                 }
                 break;
             case _BOOL:
                 if (flag != 0) {
-                    fprintf(stderr, "invalid type specifier: _BOOL");
-                    exit(-1);
+                    fprintf(stderr, "%s:%d: Error: invalid type specifier: _BOOL\n", entry.generic->file, entry.generic->line);
+                    exit(EXIT_FAILURE);
                 }
                 addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, bool_type);
                 break;
@@ -1132,8 +1069,8 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
                 if (flag == 0 || flag == float_type || hasFlag(flag, double_type) || flag == lint_type)
                     addTypeNode((int *) &spec_node->stype, spec_node->type_specs, val, complex_type);
                 else {
-                    fprintf(stderr, "invalid type specifier: _COMPLEX");
-                    exit(-1);
+                    fprintf(stderr, "%s:%d: Error: invalid type specifier: _COMPLEX\n", entry.generic->file, entry.generic->line);
+                    exit(EXIT_FAILURE);
                 }
         }
     }
@@ -1143,8 +1080,8 @@ void addTypeSpec(union symtab_entry entry, struct astnode_hdr *val){
         entry.generic->line = ((struct symtab_entry_generic*)val)->line;
         //Variable is of type struct, need to store pointer to struct in curr declaration for use with variable type
         if(flag != 0){
-            fprintf(stderr, "invalid type specifier");
-            exit(-1);
+            fprintf(stderr, "%s:%d: Error: two or more data types in declaration specifiers\n", entry.generic->file, entry.generic->line);
+            exit(EXIT_FAILURE);
         }
         addTypeNode((int*)&spec_node->stype, spec_node->type_specs, val, struct_type);
     }
@@ -1158,8 +1095,8 @@ void addTypeQual(enum qual_flag *qtype, struct astnode_lst *qual_types, struct L
             break;
         case RESTRICT:
             if(!ptr){
-                fprintf(stderr, "restrict can only qualify pointers");
-                exit(-1);
+                fprintf(stderr, "%s:%d: Error: invalid use of restrict\n", val->file, val->line);
+                exit(EXIT_FAILURE);
             }
 
             if(!hasFlag(*qtype,QUAL_RESTRICT))
@@ -1174,7 +1111,6 @@ void addTypeQual(enum qual_flag *qtype, struct astnode_lst *qual_types, struct L
 
 void finalizeSpecs(union symtab_entry entry){
     struct astnode_typespec *spec_node = entry.generic->type_spec;
-    // TODO: Warning?
     if(spec_node->stype == 0 || spec_node->stype == signed_type || spec_node->stype == unsigned_type){
         spec_node->stype |= int_type;
         if(spec_node->stype == int_type){
@@ -1187,18 +1123,17 @@ void finalizeSpecs(union symtab_entry entry){
                 entry.generic->line = entry.generic->storageNode->line;
             }
             else{
-                fprintf(stderr, "no declaration specifiers");
-                exit(-1);
+                fprintf(stderr, "%s:%d: Error: no declaration specifiers\n", currFile, currLine);
+                exit(EXIT_FAILURE);
             }
 
-            fprintf(stderr, "type defaults to 'int' in declaration");
+            fprintf(stderr, "%s:%d: Warning: type defaults to 'int' in declaration\n", entry.generic->file, entry.generic->line);
         }
     }
 
-    // TODO: _Complex alone not in spec but worked on my computer?
     if(spec_node->stype == complex_type || spec_node->stype == (complex_type | lint_type)){
-        fprintf(stderr, "complex must have a further real specifier");
-        exit(-1);
+        fprintf(stderr, "%s:%d: Error: _Complex type must have a further real specifier\n", entry.generic->file, entry.generic->line);
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -1235,8 +1170,8 @@ struct astnode_lst* startFncnArgs(struct astnode_hdr *arg){
 void addFncnArg(struct astnode_lst *lst, struct astnode_hdr *arg){
     struct symtab_entry_generic *entry = (struct symtab_entry_generic*)arg;
     if(entry->child == (struct astnode_spec_inter*)entry->type_spec && hasFlag(entry->type_spec->stype,void_type)){
-        fprintf(stderr, "void must be the only parameter");
-        exit(-1);
+        fprintf(stderr, "%s:%d: Error: 'void' must be the only parameter\n", entry->file, entry->line);
+        exit(EXIT_FAILURE);
     }
 
     clearEntry(currDecl);
@@ -1245,12 +1180,12 @@ void addFncnArg(struct astnode_lst *lst, struct astnode_hdr *arg){
 
 struct astnode_spec_inter* setFncn(struct astnode_fncndec *fncndec, struct astnode_spec_inter *prev){
     if(prev->type == NODE_ARY){
-        fprintf(stderr, "cannot declare an array of functions");
-        exit(-1);
+        fprintf(stderr, "%s:%d: Error: declaration of an array of functions\n", currDecl.generic->file, currDecl.generic->line);
+        exit(EXIT_FAILURE);
     }
     else if(prev->type == NODE_FNCNDEC){
-        fprintf(stderr, "function return type cannot be function");
-        exit(-1);
+        fprintf(stderr, "%s:%d: Error: declaration of a function returning a function\n", currDecl.generic->file, currDecl.generic->line);
+        exit(EXIT_FAILURE);
     }
     
     fncndec->child = prev->child;
@@ -1264,7 +1199,7 @@ struct astnode_spec_inter* setFncn(struct astnode_fncndec *fncndec, struct astno
 
 struct astnode_fncndec* addFuncArgs(struct astnode_lst *args, struct symtab *symtab, bool varArgs){
     if (symtab->tabType != TAB_FUNC){
-        fprintf(stderr, "Error: attempting to add function arguments to non-function symtab\n");
+        fprintf(stderr, "%s:%d: Error: attempting to add function arguments to non-function symtab\n", currFile, currLine);
         return NULL;
     }
 
@@ -1297,30 +1232,30 @@ struct astnode_spec_inter* setPtr(struct astnode_spec_inter *ptr, struct astnode
 
 struct astnode_spec_inter* allocAry(struct astnode_spec_inter *prev, struct LexVal *val, union symtab_entry entry, struct symtab *symtab){
     if(prev->type == NODE_FNCNDEC){
-        fprintf(stderr, "function cannot return array");
-        exit(-1);
+        fprintf(stderr, "%s:%d: Error: declaration of a function returning an array\n", currDecl.generic->file, currDecl.generic->line);
+        exit(EXIT_FAILURE);
     }
 
     if(val == NULL && symtab->scope != SCOPE_PROTO && symtab->scope != SCOPE_STRUCT && entry.generic->stgclass != STG_EXTERN && (entry.generic->stgclass != -1 || symtab->scope != SCOPE_FILE)){
-        fprintf(stderr, "array size not specified");
-        exit(-1);
+        fprintf(stderr, "%s:%d: Error: array size missing\n", currDecl.generic->file, currDecl.generic->line);
+        exit(EXIT_FAILURE);
     }
 
     if(val != NULL){
         if(val->tflags >= float_type){
-            fprintf(stderr, "array size must be an integral type");
-            exit(-1);
+            fprintf(stderr, "%s:%d: Error: size of array has non-integer type\n", currDecl.generic->file, currDecl.generic->line);
+            exit(EXIT_FAILURE);
         }
 
         if(val->value.num_val.integer_val == 0){
-            fprintf(stderr, "array size must be positive");
-            exit(-1);
+            fprintf(stderr, "%s:%d: Error: array size must be positive\n", currDecl.generic->file, currDecl.generic->line);
+            exit(EXIT_FAILURE);
         }
     }
 
     if(prev->child->type == NODE_ARY && !((struct astnode_ary*)prev->child)->complete || prev->type == NODE_ARY && val == NULL){
-        fprintf(stderr, "only first dimension can be empty");
-        exit(-1);
+        fprintf(stderr, "%s:%d: Error: only first dimension of multidimensional array can be empty\n", currDecl.generic->file, currDecl.generic->line);
+        exit(EXIT_FAILURE);
     }
 
     struct astnode_ary *ary = mallocSafe(sizeof(struct astnode_ary));
@@ -1554,10 +1489,7 @@ void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum){
             printf("%s %s definition at %s:%d{\n",
                    structType, structName, fileName, line);
         }
-        /*else{
-            printf("struct %s definition at %s:%d (incomplete)\n",
-                   structName, fileName, line);
-        }*/
+
         return;
     }
 
@@ -1566,7 +1498,7 @@ void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum){
     if(isMemb) {
         char *structName, *structType;
         if (symtab->tabType != TAB_STRUCT) {
-            fprintf(stderr, "Error: attempting to print member info with tab not of type TAB_STRUCT\n");
+            fprintf(stderr, "%s:%d: Error: attempting to print member info with tab not of type TAB_STRUCT\n", entry.generic->file, entry.generic->line);
             structName = "";
         }
         else if (((struct symtab_struct*)symtab)->parentStruct->ident != NULL)
@@ -1605,7 +1537,6 @@ void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum){
 }
 
 void printSpec(struct astnode_spec_inter *next, struct symtab *symtab, bool func, long level, long castLevel){
-    /* TODO: iterate over pointers, arrays, functions */
     printTabs2(func, level, castLevel);
     if(next->type != NODE_TYPESPEC){    
         if(next->type == NODE_ARY){
@@ -1689,7 +1620,7 @@ void printSpec(struct astnode_spec_inter *next, struct symtab *symtab, bool func
             if(tagNode->complete)
                 structDef = ((struct symtab_struct*)tagNode->container)->parentStruct;
             else
-                fprintf(stderr, "Error: anonymous struct incomplete");
+                fprintf(stderr, "%s:%d: Error: anonymous struct incomplete\n", currFile, currLine);
         }
         else
             structDef = symtabLookup(symtab, TAG, structName, false).tag;
@@ -1698,7 +1629,6 @@ void printSpec(struct astnode_spec_inter *next, struct symtab *symtab, bool func
             printf("(incomplete)");
         else
             printf("(defined at %s:%d)", structDef->file, structDef->line);
-        //TODO: lookup struct in curr table and print incomplete/location defined
     }
 
     printf("\n");
@@ -1724,7 +1654,7 @@ void printArgs(struct astnode_fncndec *fncn, struct symtab *symtab, bool func, l
     else {
         printf("  and taking the following arguments\n");
         for(int i = 0; i < fncn->args->numVals; i++){
-            //TODO: will this cast be safe?
+            // arguments can only be entries
             struct symtab_entry_generic *arg = (struct symtab_entry_generic *)fncn->args->els[i];
             if(arg->child != NULL) {
                 printf("  ");
@@ -1746,7 +1676,7 @@ void printStruct(struct astnode_hdr *structHdr){
     if(structHdr->type != NODE_SYMTAB ||
         (((struct symtab_entry_generic*)structHdr)->st_type != ENTRY_STAG
                 && ((struct symtab_entry_generic*)structHdr)->st_type != ENTRY_UTAG)){
-        fprintf(stderr, "Error: printStruct called with non-struct node\n");
+        fprintf(stderr, "%s:%d: Error: printStruct called with non-struct node\n", currFile, currLine);
         return;
     }
 
@@ -1767,30 +1697,4 @@ void printStruct(struct astnode_hdr *structHdr){
     }
 
     printf("} (size==%zu)\n\n", getStructSize(structNode, false));
-}
-
-void finalizeStruct(struct astnode_hdr *structHdr, struct symtab *searchTab, bool complete){
-    struct astnode_tag *structNode = (struct astnode_tag*)structHdr;
-    if(complete && structNode->ident != NULL) {
-        union symtab_entry existingEntry = symtabLookup(searchTab, TAG, structNode->ident->value.string_val, true);
-        if(existingEntry.generic != NULL &&
-            (existingEntry.generic->st_type == ENTRY_STAG || existingEntry.generic->st_type == ENTRY_UTAG)
-            && existingEntry.tag->complete){
-            fprintf(stderr, "Error at %s:%d: attempting to set struct/union as complete with existing complete value present\n",
-                    structNode->file, structNode->line);
-            exit(EXIT_FAILURE);
-        }
-    }
-
-    structNode->complete = complete;
-
-    if(structNode->complete && !structNode->namedEntry){
-        fprintf(stderr, "flexible array member in struct with no named members");
-        exit(-1);
-    }
-
-    currDecl.generic->stgclass = structNode->stgclass;
-    currDecl.generic->storageNode = structNode->storageNode;
-    currDecl.generic->type_spec->qtype = structNode->type_spec->qtype;
-    currDecl.generic->type_spec->type_quals = structNode->type_spec->type_quals;
 }
