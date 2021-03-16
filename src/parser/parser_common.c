@@ -522,7 +522,10 @@ struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_ent
         }
     }
 
-    if((entry.generic->st_type != ENTRY_VAR && entry.generic->st_type != ENTRY_FNCN) || symtab->scope == SCOPE_PROTO || ((symtab->scope == SCOPE_BLOCK || symtab->scope == SCOPE_FUNC) && entry.generic->stgclass != STG_EXTERN))
+    if(     (entry.generic->st_type != ENTRY_VAR && entry.generic->st_type != ENTRY_FNCN)
+            || symtab->scope == SCOPE_PROTO ||
+            ((symtab->scope == SCOPE_BLOCK || symtab->scope == SCOPE_FUNC) && entry.generic->stgclass != STG_EXTERN)
+    )
         entry.generic->linkage = LINK_NONE;
     else if(entry.generic->stgclass == STG_STATIC && symtab->scope == SCOPE_FILE)
         entry.generic->linkage = LINK_INT;
@@ -546,6 +549,8 @@ struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_ent
         symtab->head = entry;
         entry.generic->prev.generic = NULL;
         entry.generic->next = oldHead;
+        if(oldHead.generic != NULL)
+            oldHead.generic->prev = entry;
     }
 
     success:
@@ -1583,7 +1588,7 @@ void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum){
         if(entry.generic->stgclass != -1 || entry.generic->linkage == LINK_EXT)
             printf("with stgclass %s  ", storage);
 
-        printf("of type\n  ");
+        printf("of type:\n  ");
     }
 
     struct astnode_spec_inter *child = entry.generic->child;
