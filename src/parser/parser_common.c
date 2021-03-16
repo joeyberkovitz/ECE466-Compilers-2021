@@ -333,11 +333,14 @@ struct symtab* symtabCreate(enum symtab_scope scope, enum tab_type tabType, stru
 }
 
 void exitScope(){
+    if(currTab->scope == SCOPE_FUNC)
+        ((struct symtab_func*)currTab)->parentFunc->defined = true;
+    
     currTab = currTab->parent;
 }
 
 void enterBlockScope(struct LexVal *lexVal){
-    if(currTab->scope == SCOPE_FUNC){
+    if(currTab->scope == SCOPE_FUNC && ((struct symtab_func*)currTab)->parentFunc->defined){
         struct astnode_fncndec *fncNode = ((struct symtab_func*)currTab)->parentFunc;
         fprintf(stderr, "%s:%d: Error: redefinition of '%s'\n", lexVal->file, lexVal->line, fncNode->ident->value.string_val);
          exit(EXIT_FAILURE);
@@ -355,7 +358,6 @@ void enterBlockScope(struct LexVal *lexVal){
             exit(EXIT_FAILURE);
         }
 
-        fncNode->defined = true;
         currTab->scope = SCOPE_FUNC;
         currTab->file = lexVal->file;
         currTab->line = lexVal->line;
