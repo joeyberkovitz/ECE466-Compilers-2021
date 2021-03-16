@@ -9,137 +9,13 @@ void *mallocSafe(size_t size){
     void *ret = malloc(size);
     if(ret == NULL){
         yyerror("parser failed to malloc");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
     return ret;
 }
 
 void yyerror(char const* s){
     fprintf(stderr, "%s:%d: Error: %s\n", currFile, currLine, s);
-}
-
-void printTabs1(int lvl){
-    for(int i = 0; i < lvl; i++)
-        printf("  ");
-}
-
-void printAst(struct astnode_hdr *hdr, int lvl){
-    union astnode *node = (union astnode*) &hdr;
-    printTabs1(lvl);
-
-    switch (hdr->type) {
-        case NODE_LEX:
-            switch (node->lexNode->sym) {
-                case IDENT:
-                    printf("IDENT  %s\n", node->lexNode->value.string_val); break;
-                case NUMBER:
-                    switch (node->lexNode->tflags) {
-                        case int_type: 
-                            printf("CONSTANT:  (type=int)%lld\n", node->lexNode->value.num_val.integer_val); break;
-                        case uint_type: 
-                            printf("CONSTANT:  (type=unsigned,int)%lld\n", node->lexNode->value.num_val.integer_val); break;
-                        case lint_type: 
-                            printf("CONSTANT:  (type=long)%lld\n", node->lexNode->value.num_val.integer_val); break;
-                        case ulint_type: 
-                            printf("CONSTANT:  (type=unsigned,long)%lld\n", node->lexNode->value.num_val.integer_val); break;
-                        case llint_type: 
-                            printf("CONSTANT:  (type=longlong)%lld\n", node->lexNode->value.num_val.integer_val); break;
-                        case ullint_type: 
-                            printf("CONSTANT:  (type=unsigned,longlong)%lld\n", node->lexNode->value.num_val.integer_val); break;
-                        case float_type: 
-                            printf("CONSTANT:  (type=float)%g\n", node->lexNode->value.num_val.float_val); break;
-                        case double_type: 
-                            printf("CONSTANT:  (type=double)%g\n", node->lexNode->value.num_val.double_val); break;
-                        case ldouble_type: 
-                            printf("CONSTANT:  (type=longdouble)%Lg\n", node->lexNode->value.num_val.ldouble_val); break;
-                    }
-                    break;
-                case CHARLIT:
-                    printf("CONSTANT:  (type=int)%d\n", node->lexNode->value.string_val[0]); break;
-                case STRING:
-                    printf("STRING  %S\n", (wchar_t *) node->lexNode); break;
-            }
-            break;
-        case NODE_UNOP:
-            switch (node->unNode->op) {
-                case PLUSPLUS:
-                    printf("UNARY  OP  POSTINC\n"); break;
-                case MINUSMINUS:
-                    printf("UNARY  OP  POSTDEC\n"); break;
-                case '&':
-                    printf("ADDRESSOF\n"); break;
-                case '*':
-                    printf("DEREF\n"); break;
-                case SIZEOF:
-                    printf("SIZEOF\n"); break;
-                default:
-                    printf("UNARY  OP  %c\n", node->unNode->op);
-            }
-            printAst((struct astnode_hdr *) node->unNode->opand, lvl + 1);
-            break;
-        case NODE_BINOP:
-            switch (node->binNode->op) {
-                case '.':
-                    printf("SELECT\n"); break;
-                case SHL:
-                    printf("BINARY  OP  <<\n"); break;
-                case SHR:
-                    printf("BINARY  OP  >>\n"); break;
-                case '<':
-                    printf("COMPARISON  OP  <\n"); break;
-                case '>':
-                    printf("COMPARISON  OP  >\n"); break;
-                case LTEQ:
-                    printf("COMPARISON  OP  <=\n"); break;
-                case GTEQ:
-                    printf("COMPARISON  OP  >=\n"); break;
-                case EQEQ:
-                    printf("COMPARISON  OP  ==\n"); break;
-                case NOTEQ:
-                    printf("COMPARISON  OP  !=\n"); break;
-                case LOGAND:
-                    printf("LOGICAL  OP  &&\n"); break;
-                case LOGOR:
-                    printf("LOGICAL  OP  ||\n"); break;
-                case '=':
-                    printf("ASSIGNMENT\n"); break;
-                default:
-                    printf("BINARY  OP  %c\n", node->binNode->op);
-            }
-            printAst(node->binNode->left, lvl + 1);
-            printAst(node->binNode->right, lvl + 1);
-            break;
-        case NODE_TEROP:
-            printf("TERNARY  OP,  IF:\n");
-            printAst(node->terNode->first, lvl + 1);
-            printf("THEN:\n");
-            printAst(node->terNode->second, lvl + 1);
-            printf("ELSE:\n");
-            printAst(node->terNode->third, lvl + 1);
-            break;
-        case NODE_CAST:
-            printf("CAST OP\n  ");
-            printSpec(node->castNode->cast_spec, currTab, false, 0, lvl);
-            printAst(node->castNode->opand, lvl + 1);
-            break;
-        case NODE_LST:
-            for(int i = 0; i < node->lst->numVals; i++){
-                if(i > 0)
-                    printTabs1(lvl);
-
-                printf("arg  #%d=\n", i + 1);
-                printAst(node->lst->els[i], lvl + 1);
-            }
-            break;
-        case NODE_FNCN:
-            printf("FNCALL,  %d  arguments\n", node->fncn->lst->numVals);
-            printAst(node->fncn->name, lvl + 1);
-            printAst((struct astnode_hdr *) node->fncn->lst, lvl);
-            break;
-    }
-
-    if(lvl == 0 && hdr->type != NODE_LST)
-        printf("\n");
 }
 
 struct astnode_hdr* allocUnop(struct astnode_hdr *opand, int opType){
@@ -182,13 +58,13 @@ struct astnode_hdr* allocPostIncDec(struct LexVal *op, struct astnode_hdr *opand
 
 struct astnode_hdr* allocSizeof(){
     if(currDecl.generic->child->type == NODE_FNCNDEC){
-        fprintf(stderr, "attempting to compute sizeof function");
-        exit(-1);
+        fprintf(stderr, "%s:%d: Error: invalid application of 'sizeof' to function\n", currFile, currLine);
+        exit(EXIT_FAILURE);
     }
 
     if((hasFlag(currDecl.generic->type_spec->stype,void_type) && currDecl.generic->type_spec->parent->type != NODE_PTR) || (currDecl.generic->child->type == NODE_ARY && !((struct astnode_ary*)currDecl.generic->child)->complete) || checkStructValidity() > 0){
-        fprintf(stderr, "invalid application of sizeof to incomplete type");
-        exit(-1);
+        fprintf(stderr, "%s:%d: Error: invalid application of 'sizeof' to incomplete type\n", currFile, currLine);
+        exit(EXIT_FAILURE);
     }
 
     struct LexVal *lexVal = mallocSafe(sizeof(struct LexVal));
@@ -206,10 +82,9 @@ struct astnode_hdr* allocSizeof(){
 }
 
 struct astnode_cast* allocCast(){
-    // TODO: union too
     if(currDecl.generic->child->type == NODE_FNCNDEC || currDecl.generic->child->type == NODE_ARY || (currDecl.generic->child == (struct astnode_spec_inter*)currDecl.generic->type_spec && hasFlag(currDecl.generic->type_spec->stype,struct_type))){
-        fprintf(stderr, "conversion to non-scalar type requested");
-        exit(-1);
+        fprintf(stderr, "%s:%c: Error: conversion to non-scalar type requested\n", currFile, currLine);
+        exit(EXIT_FAILURE);
     }
 
     struct astnode_cast *cast = mallocSafe(sizeof(struct astnode_cast));
@@ -292,7 +167,6 @@ size_t computeSizeof(struct astnode_hdr* el){
                 case ENTRY_SMEM:
                 case ENTRY_UMEM:
                     ;
-                    //TODO: unions not properly handled and not planned
                     long multiplier = 1;
                     struct astnode_spec_inter *node = elUnion.symEntry->child;
                     while(node != NULL && node->type == NODE_ARY){
@@ -303,18 +177,18 @@ size_t computeSizeof(struct astnode_hdr* el){
                         node = node->child;
                     }
 
-                    //If first child is PTR, then don't care about anything else - size is PTR
                     if(node == NULL){
-                        fprintf(stderr, "unknown error occured");
-                        exit(-1);
+                        fprintf(stderr, "%s:%d: Error: unknown error occured\n", currFile, currLine);
+                        exit(EXIT_FAILURE);
                     }
 
+                    //If first child is PTR, then don't care about anything else - size is PTR
                     // TODO: target specific size of pointers
                     if(node != NULL && node->type == NODE_PTR)
                         return multiplier*sizeof(long);
 
                     if(node->type != NODE_TYPESPEC){
-                        fprintf(stderr, "Error: sizeof called, but typespec node isn't of type NODE_TYPESPEC\n");
+                        fprintf(stderr, "%s:%d: Error: sizeof called, but typespec node isn't of type NODE_TYPESPEC\n", currFile, currLine);
                         return 0;
                     }
                     struct astnode_typespec *specNode = (struct astnode_typespec *)node;
@@ -349,23 +223,23 @@ size_t computeSizeof(struct astnode_hdr* el){
                 case ENTRY_UTAG:
                     break;
                 case ENTRY_FNCN:
-                    fprintf(stderr, "Error: sizeof can't be applied to function\n");
+                    fprintf(stderr, "%s:%d: Error: sizeof can't be applied to function\n", currFile, currLine);
                     return 0;
             }
             break;
         default:
-            fprintf(stderr, "Unknown type %d passed to sizeof - unable to compute size\n", el->type);
+            fprintf(stderr, "%s:%d: Error: unknown type %d passed to sizeof - unable to compute size\n", currFile, currLine, el->type);
             return 0;
     }
 
-    fprintf(stderr, "Error: failed to compute sizeof\n");
+    fprintf(stderr, "%s:%d: Error: failed to compute sizeof\n", currFile, currLine);
     return 0;
 }
 
 size_t getStructSize(struct astnode_tag *structNode, bool ignoreIncomplete){
     // TODO: alignment issues
     if(structNode->type != NODE_SYMTAB || (structNode->st_type != ENTRY_STAG && structNode->st_type != ENTRY_UTAG)){
-        fprintf(stderr, "Error: getStructSize called with node not of type struct/union tag\n");
+        fprintf(stderr, "%s:%d: Error: getStructSize called with node not of type struct/union tag\n", currFile, currLine);
         return 0;
     }
 
@@ -380,8 +254,8 @@ size_t getStructSize(struct astnode_tag *structNode, bool ignoreIncomplete){
             (lookupVal.generic->st_type != ENTRY_STAG && lookupVal.generic->st_type != ENTRY_UTAG) ||
             (!lookupVal.tag->complete && !ignoreIncomplete) || lookupVal.tag->container == NULL
         ){
-            fprintf(stderr, "Attempting to compute sizeof struct/union %s with incomplete type\n",
-                    structNode->ident->value.string_val);
+            fprintf(stderr, "%s:%d: Error: attempting to compute sizeof struct/union %s with incomplete type\n",
+                    structNode->ident->file, structNode->ident->line, structNode->ident->value.string_val);
             return 0;
         }
         structSymtab = lookupVal.tag->container;
@@ -411,7 +285,7 @@ size_t getTabSize(enum tab_type tabType){
         case TAB_FUNC:
             return sizeof (struct symtab_func);
         default:
-            fprintf(stderr, "Error: getTabSize called with unknown tabType %d\n", tabType);
+            fprintf(stderr, "%s:%d: Error: getTabSize called with unknown tabType %d\n", currFile, currLine, tabType);
             return 0;
     }
 }
@@ -436,7 +310,7 @@ struct symtab* symtabCreate(enum symtab_scope scope, enum tab_type tabType, stru
     else{
         startFile = "n/a";
         startLine = 0;
-        fprintf(stderr, "Received unknown type %d in symtabCreate, unable to extract debug information\n", startLex->type);
+        fprintf(stderr, "%s:%d: Error: received unknown type %d in symtabCreate, unable to extract debug information\n", startLex->file, startLex->line, startLex->type);
     }
 
     symtab->file = startFile;
@@ -446,6 +320,11 @@ struct symtab* symtabCreate(enum symtab_scope scope, enum tab_type tabType, stru
         currTab->numChildren++;
         //TODO: assuming this won't fail
         currTab->children = realloc(currTab->children, sizeof(struct symtab*) * currTab->numChildren);
+        if(currTab->children == NULL){
+            fprintf(stderr, "%s:%d: Error: unknown error occurred\n", startLex->file, startLex->line);
+            exit(EXIT_FAILURE);
+        }
+
         currTab->children[currTab->numChildren - 1] = symtab;
     }
     currTab = symtab;
@@ -458,37 +337,41 @@ void exitScope(){
 }
 
 void enterBlockScope(struct LexVal *lexVal){
-    if(currTab->scope == SCOPE_PROTO)
+    if(currTab->scope == SCOPE_FUNC){
+        struct astnode_fncndec *fncNode = ((struct symtab_func*)currTab)->parentFunc;
+        fprintf(stderr, "%s:%d: Error: redefinition of '%s'\n", lexVal->file, lexVal->line, fncNode->ident->value.string_val);
+         exit(EXIT_FAILURE);
+    }
+    else if(currTab->scope == SCOPE_PROTO){
+        struct astnode_fncndec *fncNode = ((struct symtab_func*)currTab)->parentFunc;
+        // Edge case described in symtabEnter
+        if(fncNode->unknownCheck){
+            fprintf(stderr, "%s:%d: Error: number of arguments does not match prototype\n", lexVal->file, lexVal->line);
+            exit(EXIT_FAILURE);
+        }
+
+        if(fncNode->noIdent){
+            fprintf(stderr, "%s:%d: parameter name omitted\n", lexVal->file, lexVal->line);
+            exit(EXIT_FAILURE);
+        }
+
+        fncNode->defined = true;
         currTab->scope = SCOPE_FUNC;
+        currTab->file = lexVal->file;
+        currTab->line = lexVal->line;
+    }
     else
         symtabCreate(SCOPE_BLOCK, TAB_GENERIC, lexVal);
 }
 
 void enterFuncScope(struct astnode_hdr *func){
     struct astnode_fncndec *fncNode = (struct astnode_fncndec*)func;
-    if(fncNode->defined){
-        fprintf(stderr, "redefinition of function");
-        exit(-1);
-    }
-
-    // Edge case described in symtabEnter
-    if(fncNode->unknownCheck){
-        fprintf(stderr, "number of arguments does not match prototype");
-        exit(-1);
-    }
-    
-    if(fncNode->noIdent){
-        fprintf(stderr, "parameter name omitted");
-        exit(-1);
-    }
-
     currTab = (struct symtab*)(fncNode)->scope;
-    fncNode->defined = true;
 }
 
 void symtabDestroy(struct symtab *symtab){
     if(symtab->numChildren > 0){
-        fprintf(stderr, "Warning: symtab being destroyed has children which will also be destroyed");
+        fprintf(stderr, "%s:%d Warning: symtab being destroyed has children which will also be destroyed\n", currFile, currLine);
         for(int i = 0; i < symtab->numChildren; i++){
             symtabDestroy(symtab->children[i]);
         }
@@ -501,14 +384,75 @@ void symtabDestroy(struct symtab *symtab){
     union symtab_entry nextEntry;
     while(currEntry.generic != NULL){
         nextEntry = currEntry.generic->next;
-        //TODO: free elements within an entry - ex: AST Node, ...
-        free(currEntry.generic);
+        freeEntry(currEntry);
         currEntry = nextEntry;
     }
 
     free(symtab);
 
     currTab = nextTab;
+}
+
+void freeEntry(union symtab_entry entry){
+    switch(entry.generic->st_type){
+        // TODO: labels
+        case ENTRY_FNCN:
+            freeFncn(entry.fncn);
+        case ENTRY_GENERIC:
+        case ENTRY_VAR:
+        case ENTRY_SMEM:
+        case ENTRY_UMEM:
+            ;
+            struct astnode_spec_inter *nextInter = entry.generic->child;
+            while(nextInter != NULL){
+                struct astnode_spec_inter *currInter = nextInter;
+                nextInter = currInter->child;
+                switch(currInter->type){
+                    case NODE_ARY:
+                        break;
+                    case NODE_PTR:
+                        for(int i = 0; i < ((struct astnode_ptr*)currInter)->type_quals->numVals; i++)
+                            free(((struct astnode_ptr*)currInter)->type_quals->els[i]);
+
+                        break;
+                    case NODE_FNCNDEC:
+                        freeFncn((struct astnode_fncndec*)currInter);
+                        break;
+                    case NODE_TYPESPEC:
+                        if(--((struct astnode_typespec*)currInter)->numParents == 0){
+                            for(int i = 0; i < ((struct astnode_typespec*)currInter)->type_specs->numVals; i++)
+                                free(((struct astnode_typespec*)currInter)->type_specs->els[i]);
+
+                            for(int i = 0; i < ((struct astnode_typespec*)currInter)->type_quals->numVals; i++)
+                                free(((struct astnode_typespec*)currInter)->type_quals->els[i]);
+                        }
+                        else
+                            continue;
+
+                        break;
+                }
+
+                free(currInter);
+            }
+
+            break;
+        case ENTRY_STAG:
+        case ENTRY_UTAG:
+            symtabDestroy(entry.tag->container);
+            break;
+    }
+
+    free(entry.generic->ident);
+    if(entry.generic->stgclass != -1)
+        free(entry.generic->storageNode);
+
+    free(entry.generic);
+}
+
+void freeFncn(struct astnode_fncndec *fncNode){
+    symtabDestroy((struct symtab*)fncNode->scope);
+    for(int i = 0; i < fncNode->args->numVals; i++)
+        freeEntry((union symtab_entry)(struct symtab_entry_generic*)fncNode->args->els[i]);
 }
 
 union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name, bool singleScope){
@@ -560,12 +504,12 @@ struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_ent
         }
         else{
             if(existingVal.generic->linkage == LINK_NONE){
-                fprintf(stderr, "attempted redeclaration of identifier with no linkage");
-                exit(-1);
+                fprintf(stderr, "%s:%d: Error: attempted redeclaration of '%s' with no linkage\n", entry.generic->file, entry.generic->line, entry.generic->ident->value.string_val);
+                exit(EXIT_FAILURE);
             }
             else if(!checkCompatibility((struct astnode_spec_inter*)existingVal.generic, (struct astnode_spec_inter*)entry.generic, symtab, true)){
-                fprintf(stderr, "conflicting types for identifier");
-                exit(-1);
+                fprintf(stderr, "%s:%d: Error: conflicting types for '%s'\n", entry.generic->file, entry.generic->line, entry.generic->ident->value.string_val);
+                exit(EXIT_FAILURE);
             }
 
             // Set check for empty defn params but non-empty prior proto params
@@ -592,8 +536,8 @@ struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_ent
         entry.generic->linkage = LINK_EXT;
 
     if(existingVal.generic != NULL && existingVal.generic->linkage != entry.generic->linkage){
-        fprintf(stderr, "attemped redeclaration of identifier with conflicting linkage");
-        exit(-1);
+        fprintf(stderr, "%s:%d: Error: attemped redeclaration of '%s' with conflicting linkage\n", entry.generic->file, entry.generic->line, entry.generic->ident->value.string_val);
+        exit(EXIT_FAILURE);
     }
 
     if(existingVal.generic == NULL){
@@ -619,38 +563,38 @@ struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_ent
 struct symtab_entry_generic* structMembEnter(struct symtab *symtab, union symtab_entry entry){
     struct astnode_tag *structNode = ((struct symtab_struct*)symtab)->parentStruct;
     if(structNode->incAry){
-        fprintf(stderr, "flexible array member not at end of struct");
-        exit(-1);
+        fprintf(stderr, "%s:%d: Error: flexible array member not at end of struct\n", entry.generic->file, entry.generic->line);
+        exit(EXIT_FAILURE);
     }
 
     if(entry.generic->child->type == NODE_FNCNDEC){
-        fprintf(stderr, "field declared as a function");
-        exit(-1);
+        fprintf(stderr, "%s:%d: Error: field '%s' declared as a function\n", entry.generic->file, entry.generic->line, entry.generic->ident->value.string_val);
+        exit(EXIT_FAILURE);
     }
 
     checkVoid();
     int a = checkStructValidity();
     if(a == 1){
-        fprintf(stderr, "Error: struct type set, but struct not present in type specs\n");
-        exit(-1);
+        fprintf(stderr, "%s:%d: Error: struct type set, but struct not present in type specs\n", entry.generic->file, entry.generic->line);
+        exit(EXIT_FAILURE);
     }
     if(a == 2){
-        fprintf(stderr, "Error: attempt to declare incomplete struct not of type pointer");
-        exit(-1);
+        fprintf(stderr, "%s:%d: Error: attempt to declare incomplete struct not of type pointer\n", entry.generic->file, entry.generic->line);
+        exit(EXIT_FAILURE);
     }
     if(a == 3){
         if(structNode->st_type == ENTRY_UTAG)
             structNode->incAry = true;
         else{
-            fprintf(stderr, "Error: attempt to declare struct with member struct with flexible array member");
-            exit(-1);
+            fprintf(stderr, "%s:%d: Error: attempt to declare struct with member struct with flexible array member\n", entry.generic->file, entry.generic->line);
+            exit(EXIT_FAILURE);
         }
     }
 
     if(entry.generic->child->type == NODE_ARY && !((struct astnode_ary*)entry.generic->child)->complete){
         if(structNode->st_type == ENTRY_UTAG){
-            fprintf(stderr, "flexible array member in union");
-            exit(-1);
+            fprintf(stderr, "%s:%d: Error: flexible array member in union\n", entry.generic->file, entry.generic->line);
+            exit(EXIT_FAILURE);
         }
 
         structNode->incAry = true;
@@ -670,7 +614,11 @@ struct symtab_entry_generic* structMembEnter(struct symtab *symtab, union symtab
     membNode->bitWidth = 0;
     membNode->structOffset = structNode->st_type == ENTRY_STAG ? getStructSize(structNode, true) : 0;
 
-    return symtabEnter(symtab, (union symtab_entry)membNode, false);
+    struct symtab_entry_generic *ret = symtabEnter(symtab, (union symtab_entry)membNode, false);
+
+    freeInterNodes();
+
+    return ret;
 }
 
 struct astnode_hdr* symCopyAndEnter(bool enter){
@@ -682,8 +630,12 @@ struct astnode_hdr* symCopyAndEnter(bool enter){
 
     if(currTab->scope == SCOPE_PROTO){
         if(currDecl.generic->child->type == NODE_ARY){
-            // TODO: error check
             currDecl.generic->child = realloc(currDecl.generic->child, sizeof(struct astnode_ptr));
+            if(currDecl.generic->child == NULL){
+                fprintf(stderr, "%s:%d: Error: unknown error occurred\n", currDecl.generic->file, currDecl.generic->line);
+                exit(EXIT_FAILURE);
+            }
+
             currDecl.generic->child->type = NODE_PTR;
             ((struct astnode_ptr*)currDecl.generic->child)->qtype = 0;
         }
@@ -706,16 +658,16 @@ struct astnode_hdr* symCopyAndEnter(bool enter){
     else{
         int a = checkStructValidity();
         if(a == 1){
-            fprintf(stderr, "Error: struct type set, but struct not present in type specs\n");
-            exit(-1);
+            fprintf(stderr, "%s:%d: Error: struct type set, but struct not present in type specs\n", currDecl.generic->file, currDecl.generic->line);
+            exit(EXIT_FAILURE);
         }
         else if(a == 2){
-            fprintf(stderr, "Error: attempt to declare incomplete struct not of type pointer");
-            exit(-1);
+            fprintf(stderr, "%s:%d: Error: attempt to declare incomplete struct not of type pointer\n", currDecl.generic->file, currDecl.generic->line);
+            exit(EXIT_FAILURE);
         }
         else if(a == 3 && currDecl.generic->type_spec->parent->type == NODE_ARY){
-            fprintf(stderr, "Error: attempt to declare array of structs with flexible array member");
-            exit(-1);
+            fprintf(stderr, "%s:%d: Error: attempt to declare array of structs with flexible array member\n", currDecl.generic->file, currDecl.generic->line);
+            exit(EXIT_FAILURE);
         }
 
         struct astnode_var *varNode = (struct astnode_var*)allocEntry(ENTRY_VAR, false);
@@ -736,19 +688,18 @@ struct astnode_hdr* symCopyAndEnter(bool enter){
 void checkVoid(){
     if(hasFlag(currDecl.generic->type_spec->stype,void_type)){
         if(currDecl.generic->type_spec->parent->type == NODE_ARY){
-            fprintf(stderr, "declaration of type name of array of voids");
-            exit(-1);
+            fprintf(stderr, "%s:%d: Error: declaration of '%s' of array of voids\n", currDecl.generic->file, currDecl.generic->line, currDecl.generic->ident->value.string_val);
+            exit(EXIT_FAILURE);
         }
 
         if(currDecl.generic->type_spec->parent->type != NODE_PTR && currDecl.generic->type_spec->parent->type != NODE_FNCNDEC && currDecl.generic->ident != NULL){
-            fprintf(stderr, "variable or field declared void");
-            exit(-1);
+            fprintf(stderr, "%s:%d: Error: variable or field '%s' declared void\n", currDecl.generic->file, currDecl.generic->line, currDecl.generic->ident->value.string_val);
+            exit(EXIT_FAILURE);
         }
     }
 }
 
 int checkStructValidity(){
-    // Check struct validity
     struct astnode_typespec *spec_node = currDecl.generic->type_spec;
     if (hasFlag(spec_node->stype, struct_type)) {
         if(spec_node->type_specs->numVals != 1 || spec_node->type_specs->els[0]->type != NODE_SYMTAB ||
@@ -797,7 +748,7 @@ bool checkCompatibility(struct astnode_spec_inter *entry1, struct astnode_spec_i
         case NODE_ARY:
             if(((struct astnode_ary*)entry1)->complete && ((struct astnode_ary*)entry2)->complete && ((struct astnode_ary*)entry1)->length != ((struct astnode_ary*)entry2)->length)
                 return false;
-            // TODO: only creates composite array length when arrays are in same scope
+            // TODO: only creates composite array length when arrays are in same scope (ie if extern int i[] in block and previous out of block is complete, does not set length of block array
             else if(((struct astnode_ary*)entry2)->complete && !((struct astnode_ary*)entry1)->complete)
                 ((struct astnode_ary*)entry1)->length = ((struct astnode_ary*)entry2)->length;
 
@@ -869,8 +820,8 @@ bool checkCompatibility(struct astnode_spec_inter *entry1, struct astnode_spec_i
 
 bool checkCompatibilityFncn(struct astnode_fncndec *entry1, struct astnode_fncndec *entry2, struct symtab *symtab){
     if(entry1->defined && entry1->unknown && !entry2->unknown && !entry2->none){
-        fprintf(stderr, "number of arguments does not match prototype");
-        exit(-1);
+        fprintf(stderr, "%s:%d: Error: number of arguments does not match prototype\n", entry2->file, entry2->line);
+        exit(EXIT_FAILURE);
     }
 
     // TODO: Compatibility with unknown params; need type promotions
@@ -881,6 +832,16 @@ bool checkCompatibilityFncn(struct astnode_fncndec *entry1, struct astnode_fncnd
             for(int i = 0; i < entry1->args->numVals; i++){
                 if(!checkCompatibility((struct astnode_spec_inter*)entry1->args->els[i], (struct astnode_spec_inter*)entry2->args->els[i], symtab, false))
                     return false;
+
+                // keep resaving the param names if func not defined yet, decl w/o def param names don't matter
+                if(!entry1->defined)
+                    entry1->args->els[i] = entry2->args->els[i];
+            }
+
+            // keep resaving the scope if func not defined yet, decl w/o def scope only has params
+            if(!entry1->defined){
+                entry1->scope = entry2->scope;
+                entry1->noIdent = entry2->noIdent;
             }
         }
     }
@@ -916,7 +877,7 @@ struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union 
         if ((existingEntry.generic == NULL && complete) || (existingEntry.generic != NULL && !existingEntry.tag->complete && complete))
             symtabEnter(symtab, (union symtab_entry) structNode, true);
         else if (existingEntry.generic != NULL && existingEntry.tag->complete && complete) {
-            fprintf(stderr, "Attempted redeclaration of struct %s failed\n", ident->value.string_val);
+            fprintf(stderr, "%s:%d: attempted redeclaration of struct %s failed\n", ident->file, ident->line, ident->value.string_val);
             exit(EXIT_FAILURE);
         }
         else if(existingEntry.generic != NULL){
@@ -946,7 +907,7 @@ size_t getEntrySize(enum symtab_type type){
         case ENTRY_UTAG:
             return sizeof(struct astnode_tag);
         default:
-            fprintf(stderr, "Error: unknown type %d passed to getEntrySize\n", type);
+            fprintf(stderr, "%s:%d: Error: unknown type %d passed to getEntrySize\n", currFile, currLine, type);
             return 0;
     }
 }
@@ -976,6 +937,7 @@ struct symtab_entry_generic* clearEntry(union symtab_entry entry){
     struct astnode_typespec *spec_node = mallocSafe(sizeof(struct astnode_typespec));
     spec_node->type = NODE_TYPESPEC;
     spec_node->parent = (struct astnode_spec_inter*)entry.generic;
+    spec_node->child = (struct astnode_spec_inter*)NULL;
     spec_node->numParents = spec_node->stype = spec_node->qtype = 0;
     spec_node->type_specs = allocList((struct astnode_hdr*)NULL);
     spec_node->type_quals = allocList((struct astnode_hdr*)NULL);
@@ -1006,7 +968,7 @@ void checkDeclDoesStuff(union symtab_entry decl){
         }
     }
 
-    fprintf(stderr, "Error at %s:%d: declaration is useless\n", decl.generic->file, decl.generic->line);
+    fprintf(stderr, "%s:%d: Error: declaration is useless\n", decl.generic->file, decl.generic->line);
 }
 
 void setStgSpec(union symtab_entry entry, struct symtab *symtab, struct LexVal *val){
@@ -1206,8 +1168,25 @@ void addTypeQual(enum qual_flag *qtype, struct astnode_lst *qual_types, struct L
 void finalizeSpecs(union symtab_entry entry){
     struct astnode_typespec *spec_node = entry.generic->type_spec;
     // TODO: Warning?
-    if(spec_node->stype == 0 || spec_node->stype == signed_type || spec_node->stype == unsigned_type)
+    if(spec_node->stype == 0 || spec_node->stype == signed_type || spec_node->stype == unsigned_type){
         spec_node->stype |= int_type;
+        if(spec_node->stype == int_type){
+            if(spec_node->qtype != 0){
+                entry.generic->file = ((struct LexVal*)spec_node->type_quals->els[0])->file;
+                entry.generic->line = ((struct LexVal*)spec_node->type_quals->els[0])->line;
+            }
+            else if(entry.generic->stgclass != -1){
+                entry.generic->file = entry.generic->storageNode->file;
+                entry.generic->line = entry.generic->storageNode->line;
+            }
+            else{
+                fprintf(stderr, "no declaration specifiers");
+                exit(-1);
+            }
+
+            fprintf(stderr, "type defaults to 'int' in declaration");
+        }
+    }
 
     // TODO: _Complex alone not in spec but worked on my computer?
     if(spec_node->stype == complex_type || spec_node->stype == (complex_type | lint_type)){
@@ -1362,6 +1341,130 @@ void freeInterNodes(){
     currDecl.generic->type_spec->parent = (struct astnode_spec_inter*)currDecl.generic;
 }
 
+void printTabs1(int lvl){
+    for(int i = 0; i < lvl; i++)
+        printf("  ");
+}
+
+void printAst(struct astnode_hdr *hdr, int lvl){
+    union astnode *node = (union astnode*) &hdr;
+    printTabs1(lvl);
+
+    switch (hdr->type) {
+        case NODE_LEX:
+            switch (node->lexNode->sym) {
+                case IDENT:
+                    printf("IDENT  %s\n", node->lexNode->value.string_val); break;
+                case NUMBER:
+                    switch (node->lexNode->tflags) {
+                        case int_type: 
+                            printf("CONSTANT:  (type=int)%lld\n", node->lexNode->value.num_val.integer_val); break;
+                        case uint_type: 
+                            printf("CONSTANT:  (type=unsigned,int)%lld\n", node->lexNode->value.num_val.integer_val); break;
+                        case lint_type: 
+                            printf("CONSTANT:  (type=long)%lld\n", node->lexNode->value.num_val.integer_val); break;
+                        case ulint_type: 
+                            printf("CONSTANT:  (type=unsigned,long)%lld\n", node->lexNode->value.num_val.integer_val); break;
+                        case llint_type: 
+                            printf("CONSTANT:  (type=longlong)%lld\n", node->lexNode->value.num_val.integer_val); break;
+                        case ullint_type: 
+                            printf("CONSTANT:  (type=unsigned,longlong)%lld\n", node->lexNode->value.num_val.integer_val); break;
+                        case float_type: 
+                            printf("CONSTANT:  (type=float)%g\n", node->lexNode->value.num_val.float_val); break;
+                        case double_type: 
+                            printf("CONSTANT:  (type=double)%g\n", node->lexNode->value.num_val.double_val); break;
+                        case ldouble_type: 
+                            printf("CONSTANT:  (type=longdouble)%Lg\n", node->lexNode->value.num_val.ldouble_val); break;
+                    }
+                    break;
+                case CHARLIT:
+                    printf("CONSTANT:  (type=int)%d\n", node->lexNode->value.string_val[0]); break;
+                case STRING:
+                    printf("STRING  %S\n", (wchar_t *) node->lexNode); break;
+            }
+            break;
+        case NODE_UNOP:
+            switch (node->unNode->op) {
+                case PLUSPLUS:
+                    printf("UNARY  OP  POSTINC\n"); break;
+                case MINUSMINUS:
+                    printf("UNARY  OP  POSTDEC\n"); break;
+                case '&':
+                    printf("ADDRESSOF\n"); break;
+                case '*':
+                    printf("DEREF\n"); break;
+                case SIZEOF:
+                    printf("SIZEOF\n"); break;
+                default:
+                    printf("UNARY  OP  %c\n", node->unNode->op);
+            }
+            printAst((struct astnode_hdr *) node->unNode->opand, lvl + 1);
+            break;
+        case NODE_BINOP:
+            switch (node->binNode->op) {
+                case '.':
+                    printf("SELECT\n"); break;
+                case SHL:
+                    printf("BINARY  OP  <<\n"); break;
+                case SHR:
+                    printf("BINARY  OP  >>\n"); break;
+                case '<':
+                    printf("COMPARISON  OP  <\n"); break;
+                case '>':
+                    printf("COMPARISON  OP  >\n"); break;
+                case LTEQ:
+                    printf("COMPARISON  OP  <=\n"); break;
+                case GTEQ:
+                    printf("COMPARISON  OP  >=\n"); break;
+                case EQEQ:
+                    printf("COMPARISON  OP  ==\n"); break;
+                case NOTEQ:
+                    printf("COMPARISON  OP  !=\n"); break;
+                case LOGAND:
+                    printf("LOGICAL  OP  &&\n"); break;
+                case LOGOR:
+                    printf("LOGICAL  OP  ||\n"); break;
+                case '=':
+                    printf("ASSIGNMENT\n"); break;
+                default:
+                    printf("BINARY  OP  %c\n", node->binNode->op);
+            }
+            printAst(node->binNode->left, lvl + 1);
+            printAst(node->binNode->right, lvl + 1);
+            break;
+        case NODE_TEROP:
+            printf("TERNARY  OP,  IF:\n");
+            printAst(node->terNode->first, lvl + 1);
+            printf("THEN:\n");
+            printAst(node->terNode->second, lvl + 1);
+            printf("ELSE:\n");
+            printAst(node->terNode->third, lvl + 1);
+            break;
+        case NODE_CAST:
+            printf("CAST OP\n  ");
+            printSpec(node->castNode->cast_spec, currTab, false, 0, lvl);
+            printAst(node->castNode->opand, lvl + 1);
+            break;
+        case NODE_LST:
+            for(int i = 0; i < node->lst->numVals; i++){
+                if(i > 0)
+                    printTabs1(lvl);
+
+                printf("arg  #%d=\n", i + 1);
+                printAst(node->lst->els[i], lvl + 1);
+            }
+            break;
+        case NODE_FNCN:
+            printf("FNCALL,  %d  arguments\n", node->fncn->lst->numVals);
+            printAst(node->fncn->name, lvl + 1);
+            printAst((struct astnode_hdr *) node->fncn->lst, lvl);
+            break;
+    }
+
+    if(lvl == 0 && hdr->type != NODE_LST)
+        printf("\n");
+}
+
 void printQual(enum qual_flag qflags){
     if(hasFlag(qflags,QUAL_CONST))
         printf("const ");
@@ -1471,7 +1574,7 @@ void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum){
         );
     }
     else if(isFunc)
-        printf("%s   function returning:\n  ", storage);
+        printf("%s   function returning\n  ", storage);
     else{
         printf("%s ", usage);
         if(argNum > 0 && symtab->scope == SCOPE_PROTO)

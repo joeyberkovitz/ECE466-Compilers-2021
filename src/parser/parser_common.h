@@ -227,6 +227,8 @@ void exitScope();
 void enterBlockScope(struct LexVal *lexVal);
 void enterFuncScope(struct astnode_hdr* func);
 void symtabDestroy(struct symtab *symtab);
+void freeEntry(union symtab_entry entry);
+void freeFncn(struct astnode_fncndec *fncNode);
 union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name, bool singleScope);
 struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace);
 struct symtab_entry_generic* structMembEnter(struct symtab *symtab, union symtab_entry entry);

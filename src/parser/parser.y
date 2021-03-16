@@ -411,7 +411,7 @@ struct-declaration-list:
     ;
 
 struct-declaration:
-        specifier-qualifier-list struct-declarator-list ';' {clearEntry(currDecl);}
+        specifier-qualifier-list end-declaration-spec struct-declarator-list ';' {clearEntry(currDecl);}
     ;
 
 specifier-qualifier-list:
@@ -461,8 +461,8 @@ direct-declarator:
     ;
 
 start-func-subroutine:
-        {$<specInter>$ = (struct astnode_spec_inter*)currDecl.generic; startFuncDecl(true, $<lexNode>-1);} parameter-type-list {free(currDecl.generic); currDecl.generic = (struct symtab_entry_generic*)$<specInter>1; exitScope(); $$ = $2;}
-    |   %empty  {$$ = startFuncDecl(false, $<lexNode>-1); exitScope();}
+        {$<specInter>$ = (struct astnode_spec_inter*)currDecl.generic; startFuncDecl(true, $<lexNode>0);} parameter-type-list {free(currDecl.generic); currDecl.generic = (struct symtab_entry_generic*)$<specInter>1; exitScope(); $$ = $2;}
+    |   %empty  {$$ = startFuncDecl(false, $<lexNode>0); exitScope();}
     ;
 
 pointer:
