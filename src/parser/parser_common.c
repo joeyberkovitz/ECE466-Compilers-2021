@@ -83,7 +83,7 @@ struct astnode_hdr* allocSizeof(){
 
 struct astnode_cast* allocCast(){
     if(currDecl.generic->child->type == NODE_FNCNDEC || currDecl.generic->child->type == NODE_ARY || (currDecl.generic->child == (struct astnode_spec_inter*)currDecl.generic->type_spec && hasFlag(currDecl.generic->type_spec->stype,struct_type))){
-        fprintf(stderr, "%s:%c: Error: conversion to non-scalar type requested\n", currFile, currLine);
+        fprintf(stderr, "%s:%d: Error: conversion to non-scalar type requested\n", currFile, currLine);
         exit(EXIT_FAILURE);
     }
 
@@ -249,7 +249,7 @@ size_t getStructSize(struct astnode_tag *structNode, bool ignoreIncomplete){
         structSymtab = structNode->container;
     else {
         //TODO: will we always be in the correct symbol table when attempting to compute sizeof?
-        union symtab_entry lookupVal = symtabLookup(currTab, TAG, structNode->ident->value.string_val, false);
+        union symtab_entry lookupVal = symtabLookup(currTab, TAG, structNode->ident->value.string_val, false, -1);
         if(lookupVal.generic == NULL ||
             (lookupVal.generic->st_type != ENTRY_STAG && lookupVal.generic->st_type != ENTRY_UTAG) ||
             (!lookupVal.tag->complete && !ignoreIncomplete) || lookupVal.tag->container == NULL
@@ -370,7 +370,7 @@ void enterFuncScope(struct astnode_hdr *func){
     currTab = (struct symtab*)(fncNode)->scope;
 }
 
-union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name, bool singleScope){
+union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name, bool singleScope, enum linkage_type linkage){
     if(symtab == NULL)
         return (union symtab_entry)(struct symtab_entry_generic*)NULL;
 
@@ -379,7 +379,8 @@ union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *
     while(currEntry.generic != NULL){
         nextEntry = currEntry.generic->next;
         if( currEntry.generic->ns == ns &&
-                strcmp(currEntry.generic->ident->value.string_val, name) == 0){
+                strcmp(currEntry.generic->ident->value.string_val, name) == 0 &&
+                (linkage == -1 || currEntry.generic->linkage == linkage)){
             return currEntry;
         }
         currEntry = nextEntry;
@@ -388,7 +389,7 @@ union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *
     //If scope is struct, then only members are in single scope. All others are in parent
     if(singleScope && (symtab->scope != SCOPE_STRUCT || ns == MEMBER))
         return (union symtab_entry)(struct symtab_entry_generic*)NULL;
-    return symtabLookup(symtab->parent, ns, name, false);
+    return symtabLookup(symtab->parent, ns, name, false, linkage);
 }
 
 struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
@@ -399,7 +400,34 @@ struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_ent
     if(entry.generic->stgclass == -1 && symtab->scope != SCOPE_PROTO)
         handleStgDefaults(entry, symtab);
 
-    union symtab_entry existingVal = symtabLookup(symtab, entry.generic->ns, entry.generic->ident->value.string_val, true);
+    if(entry.generic->st_type == ENTRY_FNCN && (symtab->scope == SCOPE_FUNC || symtab->scope == SCOPE_BLOCK) && entry.generic->stgclass != STG_EXTERN){
+        fprintf(stderr, "%s:%d: Error: invalid storage class for function '%s'\n", entry.generic->file, entry.generic->line, entry.generic->ident->value.string_val);
+        exit(EXIT_FAILURE);
+    }
+
+    union symtab_entry existingVal = symtabLookup(symtab, entry.generic->ns, entry.generic->ident->value.string_val, true, -1);
+
+    if((entry.generic->st_type != ENTRY_VAR && entry.generic->st_type != ENTRY_FNCN) || symtab->scope == SCOPE_PROTO || ((symtab->scope == SCOPE_BLOCK || symtab->scope == SCOPE_FUNC) && entry.generic->stgclass != STG_EXTERN))
+        entry.generic->linkage = LINK_NONE;
+    else if(entry.generic->stgclass == STG_STATIC && symtab->scope == SCOPE_FILE)
+        entry.generic->linkage = LINK_INT;
+    else if(entry.generic->stgclass == STG_EXTERN){
+        if(existingVal.generic != NULL)
+            entry.generic->linkage = existingVal.generic->linkage;
+        else
+            entry.generic->linkage = LINK_EXT;
+    }
+    else
+        entry.generic->linkage = LINK_EXT;
+
+    if(entry.generic->linkage == LINK_EXT || entry.generic->linkage == LINK_INT){
+        union symtab_entry existingTemp = symtabLookup(symtab, entry.generic->ns, entry.generic->ident->value.string_val, false, entry.generic->linkage);
+        if(existingTemp.generic != NULL && !checkCompatibility((struct astnode_spec_inter*)existingTemp.generic, (struct astnode_spec_inter*)entry.generic, symtab, true)){
+            fprintf(stderr, "%s:%d: Error: conflicting types for '%s'\n", entry.generic->file, entry.generic->line, entry.generic->ident->value.string_val);
+            exit(EXIT_FAILURE);
+        }
+    }        
+
     if(existingVal.generic != NULL){
         if(replace){
             if(existingVal.generic->next.generic != NULL) {
@@ -422,10 +450,6 @@ struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_ent
                 fprintf(stderr, "%s:%d: Error: redeclaration of '%s' with no linkage\n", entry.generic->file, entry.generic->line, entry.generic->ident->value.string_val);
                 exit(EXIT_FAILURE);
             }
-            else if(!checkCompatibility((struct astnode_spec_inter*)existingVal.generic, (struct astnode_spec_inter*)entry.generic, symtab, true)){
-                fprintf(stderr, "%s:%d: Error: conflicting types for '%s'\n", entry.generic->file, entry.generic->line, entry.generic->ident->value.string_val);
-                exit(EXIT_FAILURE);
-            }
 
             // Set check for empty defn params but non-empty prior proto params
             if(existingVal.generic->st_type == ENTRY_FNCN && entry.generic->st_type == ENTRY_FNCN){
@@ -436,22 +460,6 @@ struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_ent
             }
         }
     }
-
-    if(     (entry.generic->st_type != ENTRY_VAR && entry.generic->st_type != ENTRY_FNCN)
-            || symtab->scope == SCOPE_PROTO ||
-            ((symtab->scope == SCOPE_BLOCK || symtab->scope == SCOPE_FUNC) && entry.generic->stgclass != STG_EXTERN)
-    )
-        entry.generic->linkage = LINK_NONE;
-    else if(entry.generic->stgclass == STG_STATIC && symtab->scope == SCOPE_FILE)
-        entry.generic->linkage = LINK_INT;
-    else if(entry.generic->stgclass == STG_EXTERN){
-        if(existingVal.generic != NULL)
-            entry.generic->linkage = existingVal.generic->linkage;
-        else
-            entry.generic->linkage = LINK_EXT;
-    }
-    else
-        entry.generic->linkage = LINK_EXT;
 
     if(existingVal.generic != NULL && existingVal.generic->linkage != entry.generic->linkage){
         fprintf(stderr, "%s:%d: Error: attemped redeclaration of '%s' with conflicting linkage\n", entry.generic->file, entry.generic->line, entry.generic->ident->value.string_val);
@@ -631,7 +639,7 @@ int checkStructValidity(){
         struct astnode_tag *structNode = (struct astnode_tag*)spec_node->type_specs->els[0];
         bool structComplete = false;
         if(!structNode->complete && structNode->ident != NULL){
-            struct astnode_tag *lookupNode = symtabLookup(currTab, TAG, structNode->ident->value.string_val, false).tag;
+            struct astnode_tag *lookupNode = symtabLookup(currTab, TAG, structNode->ident->value.string_val, false, -1).tag;
             if(lookupNode != NULL && lookupNode->complete)
                 structComplete = true;
         }
@@ -668,9 +676,14 @@ bool checkCompatibility(struct astnode_spec_inter *entry1, struct astnode_spec_i
         case NODE_ARY:
             if(((struct astnode_ary*)entry1)->complete && ((struct astnode_ary*)entry2)->complete && ((struct astnode_ary*)entry1)->length != ((struct astnode_ary*)entry2)->length)
                 return false;
-            // TODO: only creates composite array length when arrays are in same scope (ie if extern int i[] in block and previous out of block is complete, does not set length of block array
-            else if(((struct astnode_ary*)entry2)->complete && !((struct astnode_ary*)entry1)->complete)
+            else if(((struct astnode_ary*)entry2)->complete && !((struct astnode_ary*)entry1)->complete){
+                ((struct astnode_ary*)entry1)->complete = true;
                 ((struct astnode_ary*)entry1)->length = ((struct astnode_ary*)entry2)->length;
+            }
+            else if(((struct astnode_ary*)entry1)->complete && !((struct astnode_ary*)entry2)->complete){
+                ((struct astnode_ary*)entry2)->complete = true;
+                ((struct astnode_ary*)entry2)->length = ((struct astnode_ary*)entry1)->length;
+            }
 
             return checkCompatibility(entry1->child, entry2->child, symtab, true);
         case NODE_FNCNDEC:
@@ -725,8 +738,8 @@ bool checkCompatibility(struct astnode_spec_inter *entry1, struct astnode_spec_i
                 if(tagNode1->ident == NULL || strcmp(tagNode1->ident->value.string_val, tagNode2->ident->value.string_val))
                     return false;
                 
-                struct astnode_tag *structDef1 = symtabLookup(symtab, TAG, tagNode1->ident->value.string_val, false).tag;
-                struct astnode_tag *structDef2 = symtabLookup(symtab, TAG, tagNode2->ident->value.string_val, false).tag;
+                struct astnode_tag *structDef1 = symtabLookup(symtab, TAG, tagNode1->ident->value.string_val, false, -1).tag;
+                struct astnode_tag *structDef2 = symtabLookup(symtab, TAG, tagNode2->ident->value.string_val, false, -1).tag;
 
                 if(structDef1 != structDef2)
                     return false;
@@ -792,7 +805,7 @@ struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union 
         while(searchTab->scope == SCOPE_STRUCT)
             searchTab = searchTab->parent;
 
-        union symtab_entry existingEntry = symtabLookup(searchTab, TAG, ident->value.string_val, true);
+        union symtab_entry existingEntry = symtabLookup(searchTab, TAG, ident->value.string_val, true, -1);
 
         //Only enter into symtab if complete. If incomplete, will consider entering at end of declaration
         if ((existingEntry.generic == NULL && complete) || (existingEntry.generic != NULL && !existingEntry.tag->complete && complete))
@@ -816,7 +829,7 @@ struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union 
 void finalizeStruct(struct astnode_hdr *structHdr, struct symtab *searchTab, bool complete){
     struct astnode_tag *structNode = (struct astnode_tag*)structHdr;
     if(complete && structNode->ident != NULL) {
-        union symtab_entry existingEntry = symtabLookup(searchTab, TAG, structNode->ident->value.string_val, true);
+        union symtab_entry existingEntry = symtabLookup(searchTab, TAG, structNode->ident->value.string_val, true, -1);
         if(existingEntry.generic != NULL &&
             (existingEntry.generic->st_type == ENTRY_STAG || existingEntry.generic->st_type == ENTRY_UTAG)
             && existingEntry.tag->complete){
@@ -907,7 +920,7 @@ void checkDeclDoesStuff(union symtab_entry decl){
         }
 
         if(tagNode != NULL && tagNode->ident != NULL){
-            union symtab_entry existingNode = symtabLookup(currTab, TAG, tagNode->ident->value.string_val, true);
+            union symtab_entry existingNode = symtabLookup(currTab, TAG, tagNode->ident->value.string_val, true, -1);
             if(existingNode.generic == NULL)
                 symtabEnter(currTab, (union symtab_entry)tagNode, false);
             return;
@@ -918,7 +931,7 @@ void checkDeclDoesStuff(union symtab_entry decl){
 }
 
 void setStgSpec(union symtab_entry entry, struct symtab *symtab, struct LexVal *val){
-    // TODO: stgclass of struct VARIABLE applies to all members
+    // TODO: stgclass of struct/union VARIABLE applies to all members; no linkage transfer
     if(entry.generic->stgclass == -1){
         if(symtab->scope == SCOPE_FILE && (val->sym == AUTO || val->sym == REGISTER)){
             fprintf(stderr, "%s:%d: Error: file-scope declaration specifies '%s'\n", val->file, val->line, val->sym == AUTO ? "auto" : "register");
@@ -1623,7 +1636,7 @@ void printSpec(struct astnode_spec_inter *next, struct symtab *symtab, bool func
                 fprintf(stderr, "%s:%d: Error: anonymous struct incomplete\n", currFile, currLine);
         }
         else
-            structDef = symtabLookup(symtab, TAG, structName, false).tag;
+            structDef = symtabLookup(symtab, TAG, structName, false, -1).tag;
 
         if(structDef == NULL || !structDef->complete)
             printf("(incomplete)");

@@ -11,6 +11,45 @@ void* mallocSafe(size_t size);
 void printTabs1(int lvl);
 void printAst(struct astnode_hdr *hdr, int lvl);
 
+struct astnode_hdr {
+    enum node_type type;
+};
+
+struct astnode_unop {
+    enum node_type type;
+    int op;
+    struct astnode_hdr *opand;
+};
+
+struct astnode_binop {
+    enum node_type type;
+    int op;
+    struct astnode_hdr *left, *right;
+};
+
+struct astnode_terop {
+    enum node_type type;
+    struct astnode_hdr *first, *second, *third;
+};
+
+struct astnode_cast {
+    enum node_type type;
+    struct astnode_spec_inter *cast_spec;
+    struct astnode_hdr *opand;
+};
+
+struct astnode_lst {
+    enum node_type type;
+    int numVals;
+    struct astnode_hdr** els;
+};
+
+struct astnode_fncn {
+    enum node_type type;
+    struct astnode_hdr *name;
+    struct astnode_lst *lst;
+};
+
 struct astnode_hdr*  allocUnop(struct astnode_hdr *opand, int opType);
 struct astnode_hdr*  allocBinop(struct astnode_hdr *left, struct astnode_hdr *right, int opType);
 struct astnode_hdr*  allocTerop(struct astnode_hdr *first, struct astnode_hdr *second, struct astnode_hdr *third);
@@ -226,7 +265,7 @@ struct symtab* symtabCreate(enum symtab_scope scope, enum tab_type tabType, stru
 void exitScope();
 void enterBlockScope(struct LexVal *lexVal);
 void enterFuncScope(struct astnode_hdr* func);
-union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name, bool singleScope);
+union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name, bool singleScope, enum linkage_type linkage);
 struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace);
 struct symtab_entry_generic* structMembEnter(struct symtab *symtab, union symtab_entry entry);
 struct astnode_hdr* symCopyAndEnter(bool enter);

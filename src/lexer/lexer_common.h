@@ -29,7 +29,6 @@ enum node_type {
     NODE_PTR,
     NODE_FNCNDEC
 };
-
 typedef union {
 	unsigned long long int integer_val;
 	float float_val;
@@ -83,46 +82,6 @@ struct LexVal {
     enum token_flag flags;
     enum type_flag tflags;
     LexVals value;
-};
-
-//Present only for identifying type of node - contains any common fields
-struct astnode_hdr {
-    enum node_type type;
-};
-
-struct astnode_unop {
-    enum node_type type;
-    int op;
-    struct astnode_hdr *opand;
-};
-
-struct astnode_binop {
-    enum node_type type;
-    int op;
-    struct astnode_hdr *left, *right;
-};
-
-struct astnode_terop {
-    enum node_type type;
-    struct astnode_hdr *first, *second, *third;
-};
-
-struct astnode_cast {
-    enum node_type type;
-    struct astnode_spec_inter *cast_spec;
-    struct astnode_hdr *opand;
-};
-
-struct astnode_lst {
-    enum node_type type;
-    int numVals;
-    struct astnode_hdr** els;
-};
-
-struct astnode_fncn {
-    enum node_type type;
-    struct astnode_hdr *name;
-    struct astnode_lst *lst;
 };
 
 union astnode {

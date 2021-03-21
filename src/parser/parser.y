@@ -135,7 +135,6 @@ translation-unit:
 external-declaration:
           function-definition
     |     declaration
-    |     statement
     ;
 
     /* 6.9.1 - Function definitions */
@@ -520,7 +519,7 @@ direct-abstract-declarator:
     |   direct-abstract-declarator '[' NUMBER ']'                {$$ = allocAry($1, $3, currDecl, currTab)->child;}
     |   '[' NUMBER ']'                                           {$$ = allocAry((struct astnode_spec_inter*)currDecl.generic->child, $2, currDecl, currTab)->child;}
     |   direct-abstract-declarator '[' ']'                       {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab)->child;}
-    |   '[' ']'                                                  {$$ = allocAry((struct astnode_spec_inter*)currDecl.generic, (struct LexVal*)NULL, currDecl, currTab)->child;}
+    |   '[' ']'                                                  {$$ = allocAry((struct astnode_spec_inter*)currDecl.generic->child, (struct LexVal*)NULL, currDecl, currTab)->child;}
     |   direct-abstract-declarator '(' start-func-subroutine ')' {$$ = setFncn($3, $1)->child;}
     |   '(' start-func-subroutine ')'                            {$$ = setFncn($2, (struct astnode_spec_inter*)currDecl.generic->child)->child;}
     ;
