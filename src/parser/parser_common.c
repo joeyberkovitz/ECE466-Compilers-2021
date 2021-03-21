@@ -1178,20 +1178,20 @@ void addFncnArg(struct astnode_lst *lst, struct astnode_hdr *arg){
     addToList(lst, arg);
 }
 
-struct astnode_spec_inter* setFncn(struct astnode_fncndec *fncndec, struct astnode_spec_inter *prev){
-    if(prev->type == NODE_ARY){
+struct astnode_spec_inter* setFncn(struct astnode_fncndec *fncndec, struct astnode_spec_inter *next){
+    if(next->parent->type == NODE_ARY){
         fprintf(stderr, "%s:%d: Error: declaration of an array of functions\n", currDecl.generic->file, currDecl.generic->line);
         exit(EXIT_FAILURE);
     }
-    else if(prev->type == NODE_FNCNDEC){
+    else if(next->parent->type == NODE_FNCNDEC){
         fprintf(stderr, "%s:%d: Error: declaration of a function returning a function\n", currDecl.generic->file, currDecl.generic->line);
         exit(EXIT_FAILURE);
     }
     
-    fncndec->child = prev->child;
-    prev->child->parent = (struct astnode_spec_inter*)fncndec;
-    fncndec->parent = prev;
-    prev->child = (struct astnode_spec_inter*)fncndec;
+    fncndec->child = next;
+    next->parent->child = (struct astnode_spec_inter*)fncndec;
+    fncndec->parent = next->parent;
+    next->parent = (struct astnode_spec_inter*)fncndec;
     
     return (struct astnode_spec_inter*)fncndec;
 }
@@ -1221,17 +1221,17 @@ struct astnode_ptr* allocPtr(){
     return ptr;
 }
 
-struct astnode_spec_inter* setPtr(struct astnode_spec_inter *ptr, struct astnode_spec_inter *next){
-    ptr->parent = next->parent;
-    next->parent->child = ptr;
-    ptr->child = next;
-    next->parent = ptr;
+struct astnode_spec_inter* setPtr(struct astnode_spec_inter *ptr, struct astnode_spec_inter *prev){
+    ptr->parent = prev;
+    prev->child->parent = ptr;
+    ptr->child = prev->child;
+    prev->child = ptr;
 
     return ptr;
 }
 
-struct astnode_spec_inter* allocAry(struct astnode_spec_inter *prev, struct LexVal *val, union symtab_entry entry, struct symtab *symtab){
-    if(prev->type == NODE_FNCNDEC){
+struct astnode_spec_inter* allocAry(struct astnode_spec_inter *next, struct LexVal *val, union symtab_entry entry, struct symtab *symtab){
+    if(next->parent->type == NODE_FNCNDEC){
         fprintf(stderr, "%s:%d: Error: declaration of a function returning an array\n", currDecl.generic->file, currDecl.generic->line);
         exit(EXIT_FAILURE);
     }
@@ -1253,7 +1253,7 @@ struct astnode_spec_inter* allocAry(struct astnode_spec_inter *prev, struct LexV
         }
     }
 
-    if(prev->child->type == NODE_ARY && !((struct astnode_ary*)prev->child)->complete || prev->type == NODE_ARY && val == NULL){
+    if(next->parent->child->type == NODE_ARY && !((struct astnode_ary*)next->parent->child)->complete || next->parent->type == NODE_ARY && val == NULL){
         fprintf(stderr, "%s:%d: Error: only first dimension of multidimensional array can be empty\n", currDecl.generic->file, currDecl.generic->line);
         exit(EXIT_FAILURE);
     }
@@ -1267,10 +1267,10 @@ struct astnode_spec_inter* allocAry(struct astnode_spec_inter *prev, struct LexV
         ary->length = val->value.num_val.integer_val;
     }
 
-    ary->child = prev->child;
-    prev->child->parent = (struct astnode_spec_inter*)ary;
-    ary->parent = prev;
-    prev->child = (struct astnode_spec_inter*)ary;
+    ary->child = next;
+    next->parent->child = (struct astnode_spec_inter*)ary;
+    ary->parent = next->parent;
+    next->parent = (struct astnode_spec_inter*)ary;
 
     return (struct astnode_spec_inter*)ary;
 }

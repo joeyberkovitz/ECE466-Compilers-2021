@@ -456,12 +456,12 @@ sub-declarator:
     ;
 
 direct-declarator:
-        IDENT                                           {currDecl.generic->ident = $1; $$ = (struct astnode_spec_inter*)currDecl.generic;}
-    |   '(' sub-declarator ')'                          {$$ = currDecl.generic->type_spec->parent;}
+        IDENT                                                             {currDecl.generic->ident = $1; $$ = currDecl.generic->child;}
+    |   '(' {$<specInter>$ = currDecl.generic->child;} sub-declarator ')' {$$ = $<specInter>2;}
     /* Not per spec, adjusted per assignment 3 - only NUMBER or empty array size, no KR style declarations */
-    |   direct-declarator '[' NUMBER ']'                {$$ = allocAry($1, $3, currDecl, currTab);}
-    |   direct-declarator '[' ']'                       {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab);}
-    |   direct-declarator '(' start-func-subroutine ')' {$$ = setFncn($3, $1);}
+    |   direct-declarator '[' NUMBER ']'                                  {$$ = allocAry($1, $3, currDecl, currTab)->child;}
+    |   direct-declarator '[' ']'                                         {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab)->child;}
+    |   direct-declarator '(' start-func-subroutine ')'                   {$$ = setFncn($3, $1)->child;}
     ;
 
 start-func-subroutine:
@@ -470,10 +470,10 @@ start-func-subroutine:
     ;
 
 pointer:
-        '*'                             {$$ = setPtr((struct astnode_spec_inter*)allocPtr(), (struct astnode_spec_inter*)currDecl.generic->type_spec);}
-    |   '*' type-qualifier-list         {$$ = setPtr((struct astnode_spec_inter*)$2, (struct astnode_spec_inter*)currDecl.generic->type_spec);}
-    |   pointer '*' type-qualifier-list {$$ = setPtr((struct astnode_spec_inter*)$3, $1);}
-    |   pointer '*'                     {$$ = setPtr((struct astnode_spec_inter*)allocPtr(), $1);}
+        '*'                             {$$ = setPtr((struct astnode_spec_inter*)allocPtr(), (struct astnode_spec_inter*)currDecl.generic);}
+    |   '*' type-qualifier-list         {$$ = setPtr((struct astnode_spec_inter*)$2, (struct astnode_spec_inter*)currDecl.generic);}
+    |   pointer '*' type-qualifier-list {$$ = setPtr((struct astnode_spec_inter*)$3, (struct astnode_spec_inter*)currDecl.generic);}
+    |   pointer '*'                     {$$ = setPtr((struct astnode_spec_inter*)allocPtr(), (struct astnode_spec_inter*)currDecl.generic);}
     ;
 
 type-qualifier-list:
@@ -510,14 +510,14 @@ abstract-declarator:
     ;
 
 direct-abstract-declarator:
-        '(' abstract-declarator ')'                              {$$ = currDecl.generic->type_spec->parent;}
+        '(' {$<specInter>$ = currDecl.generic->child;} abstract-declarator ')' {$$ = $<specInter>2;}
     /* Not per spec, adjusted per assignment 3 - only NUMBER or empty array size, no KR style declarations */
-    |   direct-abstract-declarator '[' NUMBER ']'                {$$ = allocAry($1, $3, currDecl, currTab);}
-    |   '[' NUMBER ']'                                           {$$ = allocAry((struct astnode_spec_inter*)currDecl.generic, $2, currDecl, currTab);}
-    |   direct-abstract-declarator '[' ']'                       {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab);}
-    |   '[' ']'                                                  {$$ = allocAry((struct astnode_spec_inter*)currDecl.generic, (struct LexVal*)NULL, currDecl, currTab);}
-    |   direct-abstract-declarator '(' start-func-subroutine ')' {$$ = setFncn($3, $1);}
-    |   '(' start-func-subroutine ')'                            {$$ = setFncn($2, (struct astnode_spec_inter*)currDecl.generic);}
+    |   direct-abstract-declarator '[' NUMBER ']'                              {$$ = allocAry($1, $3, currDecl, currTab)->child;}
+    |   '[' NUMBER ']'                                                         {$$ = allocAry((struct astnode_spec_inter*)currDecl.generic->child, $2, currDecl, currTab)->child;}
+    |   direct-abstract-declarator '[' ']'                                     {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab)->child;}
+    |   '[' ']'                                                                {$$ = allocAry((struct astnode_spec_inter*)currDecl.generic, (struct LexVal*)NULL, currDecl, currTab)->child;}
+    |   direct-abstract-declarator '(' start-func-subroutine ')'               {$$ = setFncn($3, $1)->child;}
+    |   '(' start-func-subroutine ')'                                          {$$ = setFncn($2, (struct astnode_spec_inter*)currDecl.generic->child)->child;}
     ;
 
     /* 6.7.7 - Type definitions excluded from compiler */

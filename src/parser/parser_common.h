@@ -251,14 +251,14 @@ void finalizeSpecs(union symtab_entry entry);
 void finalizeStruct(struct astnode_hdr *structHdr, struct symtab *searchTab, bool complete);
 
 struct astnode_ptr* allocPtr();
-struct astnode_spec_inter* setPtr(struct astnode_spec_inter *ptr, struct astnode_spec_inter *next);
-struct astnode_spec_inter* allocAry(struct astnode_spec_inter *prev, struct LexVal *val, union symtab_entry entry, struct symtab *symtab);
+struct astnode_spec_inter* setPtr(struct astnode_spec_inter *ptr, struct astnode_spec_inter *prev);
+struct astnode_spec_inter* allocAry(struct astnode_spec_inter *next, struct LexVal *val, union symtab_entry entry, struct symtab *symtab);
 void freeInterNodes();
 
 struct astnode_fncndec* startFuncDecl(bool params, struct LexVal *lexVal);
 struct astnode_lst* startFncnArgs(struct astnode_hdr *arg);
 void addFncnArg(struct astnode_lst *lst, struct astnode_hdr *arg);
-struct astnode_spec_inter* setFncn(struct astnode_fncndec *fncndec, struct astnode_spec_inter *prev);
+struct astnode_spec_inter* setFncn(struct astnode_fncndec *fncndec, struct astnode_spec_inter *next);
 struct astnode_fncndec* addFuncArgs(struct astnode_lst *args, struct symtab *symtab, bool varArgs);
 
 void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum);
