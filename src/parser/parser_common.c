@@ -405,15 +405,14 @@ struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_ent
         exit(EXIT_FAILURE);
     }
 
-    union symtab_entry existingVal = symtabLookup(symtab, entry.generic->ns, entry.generic->ident->value.string_val, true, -1);
-
     if((entry.generic->st_type != ENTRY_VAR && entry.generic->st_type != ENTRY_FNCN) || symtab->scope == SCOPE_PROTO || ((symtab->scope == SCOPE_BLOCK || symtab->scope == SCOPE_FUNC) && entry.generic->stgclass != STG_EXTERN))
         entry.generic->linkage = LINK_NONE;
     else if(entry.generic->stgclass == STG_STATIC && symtab->scope == SCOPE_FILE)
         entry.generic->linkage = LINK_INT;
     else if(entry.generic->stgclass == STG_EXTERN){
-        if(existingVal.generic != NULL)
-            entry.generic->linkage = existingVal.generic->linkage;
+        union symtab_entry existingTemp = symtabLookup(symtab, entry.generic->ns, entry.generic->ident->value.string_val, false, -1);
+        if(existingTemp.generic != NULL && existingTemp.generic->linkage != LINK_NONE)
+            entry.generic->linkage = existingTemp.generic->linkage;
         else
             entry.generic->linkage = LINK_EXT;
     }
@@ -428,6 +427,7 @@ struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_ent
         }
     }        
 
+    union symtab_entry existingVal = symtabLookup(symtab, entry.generic->ns, entry.generic->ident->value.string_val, true, -1);
     if(existingVal.generic != NULL){
         if(replace){
             if(existingVal.generic->next.generic != NULL) {
