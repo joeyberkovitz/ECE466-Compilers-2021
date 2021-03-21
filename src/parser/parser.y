@@ -106,6 +106,7 @@
 %type  <hdr> parameter-declaration
 %type  <hdr> type-name
 %type  <specInter> direct-abstract-declarator
+%type  <specInter> start-parentheses
 %type  <fncndec> start-func-subroutine
 
 
@@ -456,12 +457,16 @@ sub-declarator:
     ;
 
 direct-declarator:
-        IDENT                                                             {currDecl.generic->ident = $1; $$ = currDecl.generic->child;}
-    |   '(' {$<specInter>$ = currDecl.generic->child;} sub-declarator ')' {$$ = $<specInter>2;}
+        IDENT                                           {currDecl.generic->ident = $1; $$ = currDecl.generic->child;}
+    |   '(' start-parentheses sub-declarator ')'        {$$ = $2;}
     /* Not per spec, adjusted per assignment 3 - only NUMBER or empty array size, no KR style declarations */
-    |   direct-declarator '[' NUMBER ']'                                  {$$ = allocAry($1, $3, currDecl, currTab)->child;}
-    |   direct-declarator '[' ']'                                         {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab)->child;}
-    |   direct-declarator '(' start-func-subroutine ')'                   {$$ = setFncn($3, $1)->child;}
+    |   direct-declarator '[' NUMBER ']'                {$$ = allocAry($1, $3, currDecl, currTab)->child;}
+    |   direct-declarator '[' ']'                       {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab)->child;}
+    |   direct-declarator '(' start-func-subroutine ')' {$$ = setFncn($3, $1)->child;}
+    ;
+
+start-parentheses:
+        %empty {$$ = currDecl.generic->child;}
     ;
 
 start-func-subroutine:
@@ -510,14 +515,14 @@ abstract-declarator:
     ;
 
 direct-abstract-declarator:
-        '(' {$<specInter>$ = currDecl.generic->child;} abstract-declarator ')' {$$ = $<specInter>2;}
+        '(' start-parentheses abstract-declarator ')'            {$$ = $2;}
     /* Not per spec, adjusted per assignment 3 - only NUMBER or empty array size, no KR style declarations */
-    |   direct-abstract-declarator '[' NUMBER ']'                              {$$ = allocAry($1, $3, currDecl, currTab)->child;}
-    |   '[' NUMBER ']'                                                         {$$ = allocAry((struct astnode_spec_inter*)currDecl.generic->child, $2, currDecl, currTab)->child;}
-    |   direct-abstract-declarator '[' ']'                                     {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab)->child;}
-    |   '[' ']'                                                                {$$ = allocAry((struct astnode_spec_inter*)currDecl.generic, (struct LexVal*)NULL, currDecl, currTab)->child;}
-    |   direct-abstract-declarator '(' start-func-subroutine ')'               {$$ = setFncn($3, $1)->child;}
-    |   '(' start-func-subroutine ')'                                          {$$ = setFncn($2, (struct astnode_spec_inter*)currDecl.generic->child)->child;}
+    |   direct-abstract-declarator '[' NUMBER ']'                {$$ = allocAry($1, $3, currDecl, currTab)->child;}
+    |   '[' NUMBER ']'                                           {$$ = allocAry((struct astnode_spec_inter*)currDecl.generic->child, $2, currDecl, currTab)->child;}
+    |   direct-abstract-declarator '[' ']'                       {$$ = allocAry($1, (struct LexVal*)NULL, currDecl, currTab)->child;}
+    |   '[' ']'                                                  {$$ = allocAry((struct astnode_spec_inter*)currDecl.generic, (struct LexVal*)NULL, currDecl, currTab)->child;}
+    |   direct-abstract-declarator '(' start-func-subroutine ')' {$$ = setFncn($3, $1)->child;}
+    |   '(' start-func-subroutine ')'                            {$$ = setFncn($2, (struct astnode_spec_inter*)currDecl.generic->child)->child;}
     ;
 
     /* 6.7.7 - Type definitions excluded from compiler */
