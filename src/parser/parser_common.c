@@ -1863,6 +1863,13 @@ struct astnode_hdr* genNoopStmt(){
     return noop;
 }
 
+char* autoSprintf(long long inVal){
+    size_t neededSize = snprintf(NULL, 0, "%lld", inVal);
+    char *buff = mallocSafe(neededSize+1);
+    sprintf(buff, "%lld", inVal);
+    return buff;
+}
+
 struct astnode_hdr* genLabel(enum label_type labelType, struct LexVal *ident, struct astnode_hdr *stmt, struct astnode_hdr *expr, struct symtab *symtab){
     struct astnode_label *label = (struct astnode_label*)allocEntry(ENTRY_LABEL, true);
     label->labelType = labelType;
@@ -1870,6 +1877,43 @@ struct astnode_hdr* genLabel(enum label_type labelType, struct LexVal *ident, st
     label->exprNode = labelType == LAB_CASE ? expr : (struct astnode_hdr*)ident;
 
     label->ident = ident;
+    if(labelType == LAB_CASE){
+        if(expr->type != NODE_LEX){
+            fprintf(stderr, "Error inserting case, value isn't constant\n");
+            exit(EXIT_FAILURE);
+        }
+        else{
+            struct LexVal *exprVal = (struct LexVal*)expr;
+            struct LexVal *newIdent = (struct LexVal *)mallocSafe(sizeof(struct LexVal));
+            newIdent->type = NODE_LEX;
+            newIdent->sym = IDENT;
+            newIdent->file = ident->file;
+            newIdent->line = ident->line;
+            newIdent->flags = 0;
+            newIdent->tflags = 0;
+            switch (exprVal->sym) {
+                case NUMBER:
+                    if(hasFlag(exprVal->tflags, int_type) || hasFlag(exprVal->tflags, lint_type) || hasFlag(exprVal->tflags, llint_type)) {
+                        newIdent->value.string_val = autoSprintf(exprVal->value.num_val.integer_val);
+                        ident = newIdent;
+                    }
+                    else{
+                        fprintf(stderr, "Error: case expression is not integer\n");
+                        exit(EXIT_FAILURE);
+                    }
+                    break;
+                case CHARLIT:
+                    newIdent->value.string_val = exprVal->value.string_val;
+                    ident = newIdent;
+                    break;
+                default:
+                    fprintf(stderr, "Error: invalid case constant of LexVal sym type %d\n", exprVal->sym);
+                    exit(EXIT_FAILURE);
+            }
+        }
+    }
+
+
     label->line = ident->line;
     label->file = ident->file;
     label->ns = LABEL;
