@@ -1766,12 +1766,12 @@ struct astnode_hdr* genNoopStmt(){
     return noop;
 }
 
-void addLabel(struct LexVal *ident, struct symtab *symtab){
+void addLabel(enum label_type labelType, struct LexVal *ident, struct astnode_hdr *stmt, struct astnode_hdr *expr, struct symtab *symtab){
     struct astnode_label *label = (struct astnode_label*)allocEntry(ENTRY_LABEL, true);
-    label->stmtLst = symtab->stmtList;
-    // After label is reduced, statement should be inserted with idx = numVals
-    //TODO: this won't really work for label inside if/else/...
-    label->stmtIdx = symtab->stmtList->numVals;
+    label->labelType = labelType;
+    label->stmtNode = stmt;
+    label->exprNode = expr;
+
     label->ident = ident;
     label->line = ident->line;
     label->file = ident->file;

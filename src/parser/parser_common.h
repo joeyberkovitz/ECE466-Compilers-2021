@@ -230,12 +230,19 @@ struct astnode_tag {
     struct symtab *container;
 };
 
+enum label_type {
+    LAB_GENERIC,
+    LAB_CASE,
+    LAB_DEFAULT
+};
+
 struct astnode_label {
     struct symtab_entry_generic;
 
     //Label specific info:
-    struct astnode_lst *stmtLst; //List of statements
-    int stmtIdx; //Idx of statement after label
+    enum label_type labelType;
+    struct astnode_hdr *stmtNode;
+    struct astnode_hdr *exprNode; //For case only
 };
 
 // header for type specifiers, pointers and arrays
@@ -351,7 +358,7 @@ void printStruct(struct astnode_hdr *structHdr);
 
 void addStmt(struct symtab *symtab, struct astnode_hdr *stmt);
 struct astnode_hdr* genNoopStmt();
-void addLabel(struct LexVal *ident, struct symtab *symtab);
+void addLabel(enum label_type labelType, struct LexVal *ident, struct astnode_hdr *stmt, struct astnode_hdr *expr, struct symtab *symtab);
 struct astnode_hdr* genCtrl(enum ctrl_type ctrlType, struct astnode_hdr *expr, struct astnode_hdr *stmt,
                             struct astnode_hdr *stmtAlt, struct astnode_hdr *expr2, struct astnode_hdr *expr3);
 struct astnode_hdr* genJump(enum jump_type jumpType, struct astnode_hdr *val);

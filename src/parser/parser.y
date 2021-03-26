@@ -89,6 +89,7 @@
 %type  <hdr> logical-AND-expression
 %type  <hdr> logical-OR-expression
 %type  <hdr> conditional-expression
+%type  <hdr> constant-expression
 %type  <hdr> assignment-expression
 %type  <lexNode> assignment-operator
 
@@ -176,9 +177,9 @@ statement:
 
     /* 6.8.1 - Labeled statements */
 labeled-statement:
-        IDENT ':' statement                         {$$=$3; addLabel($1, currTab);}
-    |   CASE constant-expression ':' statement      {$$=$4;/*TODO: implement*/}
-    |   DEFAULT ':' statement                       {$$=$3;/*TODO: implement*/}
+        IDENT ':' statement                         {$$=$3; addLabel(LAB_GENERIC, $1, $3, NULL, currTab);}
+    |   CASE constant-expression ':' statement      {$$=$4; addLabel(LAB_CASE, $1, $4, $2, currTab);}
+    |   DEFAULT ':' statement                       {$$=$3; addLabel(LAB_DEFAULT, $1, $3, NULL, currTab);}
     ;
 
     /* 6.8.2 - Compound statements */
@@ -229,7 +230,7 @@ jump-statement:
     /* TODO: 6.6 - Constant expressions; once we do statements */
     /* 6.6 - constant expressions */
 constant-expression:
-        conditional-expression
+        conditional-expression              {$$=$1; /*TODO: make sure we have a computed value here*/}
     ;
 
     /* 6.5.17 - Comma expressions */
