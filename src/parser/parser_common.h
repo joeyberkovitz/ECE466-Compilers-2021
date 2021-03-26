@@ -9,7 +9,7 @@ void yyerror(char const*);
 void* mallocSafe(size_t size);
 
 void printTabs1(int lvl);
-void printAst(struct astnode_hdr *hdr, int lvl);
+void printAst(struct astnode_hdr *hdr, int lvl, bool isFunc);
 void dumpStatements(struct astnode_lst *stmtLst, int level);
 
 struct astnode_hdr {
@@ -242,7 +242,7 @@ struct astnode_label {
     //Label specific info:
     enum label_type labelType;
     struct astnode_hdr *stmtNode;
-    struct astnode_hdr *exprNode; //For case only
+    struct astnode_hdr *exprNode; //For case this is expression, for regular this is ident
 };
 
 // header for type specifiers, pointers and arrays
@@ -358,7 +358,7 @@ void printStruct(struct astnode_hdr *structHdr);
 
 void addStmt(struct symtab *symtab, struct astnode_hdr *stmt);
 struct astnode_hdr* genNoopStmt();
-void addLabel(enum label_type labelType, struct LexVal *ident, struct astnode_hdr *stmt, struct astnode_hdr *expr, struct symtab *symtab);
+struct astnode_hdr* genLabel(enum label_type labelType, struct LexVal *ident, struct astnode_hdr *stmt, struct astnode_hdr *expr, struct symtab *symtab);
 struct astnode_hdr* genCtrl(enum ctrl_type ctrlType, struct astnode_hdr *expr, struct astnode_hdr *stmt,
                             struct astnode_hdr *stmtAlt, struct astnode_hdr *expr2, struct astnode_hdr *expr3);
 struct astnode_hdr* genJump(enum jump_type jumpType, struct astnode_hdr *val);

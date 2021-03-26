@@ -177,9 +177,9 @@ statement:
 
     /* 6.8.1 - Labeled statements */
 labeled-statement:
-        IDENT ':' statement                         {$$=$3; addLabel(LAB_GENERIC, $1, $3, NULL, currTab);}
-    |   CASE constant-expression ':' statement      {$$=$4; addLabel(LAB_CASE, $1, $4, $2, currTab);}
-    |   DEFAULT ':' statement                       {$$=$3; addLabel(LAB_DEFAULT, $1, $3, NULL, currTab);}
+        IDENT ':' statement                         {$$=genLabel(LAB_GENERIC, $1, $3, NULL, currTab);}
+    |   CASE constant-expression ':' statement      {$$=genLabel(LAB_CASE, $1, $4, $2, currTab);}
+    |   DEFAULT ':' statement                       {$$=genLabel(LAB_DEFAULT, $1, $3, NULL, currTab);}
     ;
 
     /* 6.8.2 - Compound statements */
@@ -215,7 +215,7 @@ selection-statement:
 iteration-statement:
         WHILE '(' expression ')' statement                  {$$=genCtrl(CTRL_WHILE, $3, $5, NULL, NULL, NULL);}
     |   DO statement WHILE '(' expression ')' ';'           {$$=genCtrl(CTRL_DO, $5, $2, NULL, NULL, NULL);}
-    |   FOR '(' expression-statement expression-statement expression-statement ')' statement    {$$=genCtrl(CTRL_FOR, $3, $7, NULL, $4, $5);}
+    |   FOR '(' expression-statement expression-statement expression ')' statement    {$$=genCtrl(CTRL_FOR, $3, $7, NULL, $4, $5);}
     /*TODO: do we want to handle declaration in FOR*/
     ;
 
