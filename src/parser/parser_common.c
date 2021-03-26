@@ -316,6 +316,8 @@ struct symtab* symtabCreate(enum symtab_scope scope, enum tab_type tabType, stru
     symtab->file = startFile;
     symtab->line = startLine;
 
+    symtab->stmtList = allocList(NULL);
+
     if(currTab != NULL){
         currTab->numChildren++;
         currTab->children = realloc(currTab->children, sizeof(struct symtab*) * currTab->numChildren);
@@ -332,17 +334,38 @@ struct symtab* symtabCreate(enum symtab_scope scope, enum tab_type tabType, stru
 }
 
 void exitScope(){
-    if(currTab->scope == SCOPE_FUNC)
-        ((struct symtab_func*)currTab)->parentFunc->defined = true;
+    if(currTab->scope == SCOPE_FUNC) {
+        struct symtab_func *funcTab = ((struct symtab_func *) currTab);
+        funcTab->parentFunc->defined = true;
+        //TODO: standardize print format
+        printf("Dumping AST for function %s {\n", funcTab->parentFunc->ident->value.string_val);
+        dumpStatements(currTab->stmtList, 1);
+        printf("}\n");
+
+    }
     
     currTab = currTab->parent;
+}
+
+void dumpStatements(struct astnode_lst *stmtLst, int level){
+    for(int i = 0; i < stmtLst->numVals; i++){
+        if(stmtLst->els[i]->type == NODE_LST){
+            //TODO: standardize print format
+            //This is a compound statement, recurse
+            printf("Entering compound statement: {\n");
+            dumpStatements((struct astnode_lst*)stmtLst->els[i], level + 1);
+            printf("}\n");
+        }
+        else
+            printAst(stmtLst->els[i], level);
+    }
 }
 
 void enterBlockScope(struct LexVal *lexVal){
     if(currTab->scope == SCOPE_FUNC && ((struct symtab_func*)currTab)->parentFunc->defined){
         struct astnode_fncndec *fncNode = ((struct symtab_func*)currTab)->parentFunc;
         fprintf(stderr, "%s:%d: Error: redefinition of '%s'\n", lexVal->file, lexVal->line, fncNode->ident->value.string_val);
-         exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);
     }
     else if(currTab->scope == SCOPE_PROTO){
         struct astnode_fncndec *fncNode = ((struct symtab_func*)currTab)->parentFunc;
@@ -363,6 +386,10 @@ void enterBlockScope(struct LexVal *lexVal){
     }
     else
         symtabCreate(SCOPE_BLOCK, TAB_GENERIC, lexVal);
+}
+
+void enterSwitchScope(struct LexVal *lexVal){
+    symtabCreate(SCOPE_SWITCH, TAB_GENERIC, lexVal);
 }
 
 void enterFuncScope(struct astnode_hdr *func){
@@ -386,8 +413,10 @@ union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *
         currEntry = nextEntry;
     }
 
-    //If scope is struct, then only members are in single scope. All others are in parent
-    if(singleScope && (symtab->scope != SCOPE_STRUCT || ns == MEMBER))
+    //If scope is struct, then only members are in single scope, all others are in parent
+    //If NS is LABEL, entries are only in parent function/switch scope
+    if(singleScope && (symtab->scope != SCOPE_STRUCT || ns == MEMBER) &&
+        (symtab->scope == SCOPE_FUNC || symtab->scope == SCOPE_SWITCH || ns != LABEL))
         return (union symtab_entry)(struct symtab_entry_generic*)NULL;
     return symtabLookup(symtab->parent, ns, name, false, linkage);
 }
@@ -395,6 +424,10 @@ union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *
 struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace){
     //All non-struct/union member entries go in the parent scope
     if(symtab->scope == SCOPE_STRUCT && entry.generic->ns != MEMBER)
+        return symtabEnter(symtab->parent, entry, replace);
+
+    //Labels are global to the function/switch
+    if(entry.generic->ns == LABEL && symtab->scope != SCOPE_FUNC && symtab->scope != SCOPE_SWITCH)
         return symtabEnter(symtab->parent, entry, replace);
 
     if(entry.generic->stgclass == -1 && symtab->scope != SCOPE_PROTO)
@@ -405,7 +438,9 @@ struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_ent
         exit(EXIT_FAILURE);
     }
 
-    if((entry.generic->st_type != ENTRY_VAR && entry.generic->st_type != ENTRY_FNCN) || symtab->scope == SCOPE_PROTO || ((symtab->scope == SCOPE_BLOCK || symtab->scope == SCOPE_FUNC) && entry.generic->stgclass != STG_EXTERN))
+    if((entry.generic->st_type != ENTRY_VAR && entry.generic->st_type != ENTRY_FNCN) || symtab->scope == SCOPE_PROTO ||
+        ((symtab->scope == SCOPE_BLOCK || symtab->scope == SCOPE_SWITCH || symtab->scope == SCOPE_FUNC)
+            && entry.generic->stgclass != STG_EXTERN))
         entry.generic->linkage = LINK_NONE;
     else if(entry.generic->stgclass == STG_STATIC && symtab->scope == SCOPE_FILE)
         entry.generic->linkage = LINK_INT;
@@ -866,6 +901,8 @@ size_t getEntrySize(enum symtab_type type){
         case ENTRY_STAG:
         case ENTRY_UTAG:
             return sizeof(struct astnode_tag);
+        case ENTRY_LABEL:
+            return sizeof(struct astnode_label);
         default:
             fprintf(stderr, "%s:%d: Error: unknown type %d passed to getEntrySize\n", currFile, currLine, type);
             return 0;
@@ -1302,6 +1339,7 @@ void printTabs1(int lvl){
 }
 
 void printAst(struct astnode_hdr *hdr, int lvl){
+    //TODO: handle statements
     union astnode *node = (union astnode*) &hdr;
     printTabs1(lvl);
 
@@ -1430,6 +1468,7 @@ void printQual(enum qual_flag qflags){
 }
 
 void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum){
+    //TODO: properly handle label
     char *storage, *usage;
     switch(entry.generic->stgclass){
         case STG_TYPEDEF:
@@ -1710,4 +1749,59 @@ void printStruct(struct astnode_hdr *structHdr){
     }
 
     printf("} (size==%zu)\n\n", getStructSize(structNode, false));
+}
+
+void addStmt(struct symtab *symtab, struct astnode_hdr *stmt){
+    if(stmt == NULL || symtab == NULL || symtab->stmtList == NULL){
+        fprintf(stderr, "Error: failed to add statement - invalid params\n");
+        return;
+    }
+
+    addToList(symtab->stmtList, stmt);
+}
+
+struct astnode_hdr* genNoopStmt(){
+    struct astnode_hdr *noop = mallocSafe(sizeof(struct astnode_hdr));
+    noop->type = NODE_NOOP;
+    return noop;
+}
+
+void addLabel(struct LexVal *ident, struct symtab *symtab){
+    struct astnode_label *label = (struct astnode_label*)allocEntry(ENTRY_LABEL, true);
+    label->stmtLst = symtab->stmtList;
+    // After label is reduced, statement should be inserted with idx = numVals
+    //TODO: this won't really work for label inside if/else/...
+    label->stmtIdx = symtab->stmtList->numVals;
+    label->ident = ident;
+    label->line = ident->line;
+    label->file = ident->file;
+    label->ns = LABEL;
+    //TODO: stgclass/linkage if relevant
+    symtabEnter(symtab, (union symtab_entry)label, false);
+}
+
+struct astnode_hdr* genCtrl(enum ctrl_type ctrlType, struct astnode_hdr *expr, struct astnode_hdr *stmt,
+                            struct astnode_hdr *stmtAlt, struct astnode_hdr *expr2, struct astnode_hdr *expr3){
+    struct astnode_ctrl *selStmt = mallocSafe(sizeof(struct astnode_ctrl));
+    selStmt->type = NODE_CTRL;
+    selStmt->ctrlType = ctrlType;
+    if(ctrlType == CTRL_FOR) {
+        struct astnode_lst *exprLst = (struct astnode_lst*)allocList(expr);
+        addToList(exprLst, expr3);
+        addToList(exprLst, expr2);
+        selStmt->ctrlExpr = (struct astnode_hdr*)exprLst;
+    }
+    else
+        selStmt->ctrlExpr = expr;
+    selStmt->stmt = stmt;
+    selStmt->stmtSecondary = stmtAlt;
+    return (struct astnode_hdr*)selStmt;
+}
+
+struct astnode_hdr* genJump(enum jump_type jumpType, struct astnode_hdr *val){
+    struct astnode_jump *jmpNode = (struct astnode_jump*)mallocSafe(sizeof(struct astnode_jump));
+    jmpNode->type = NODE_JMP;
+    jmpNode->jumpType = jumpType;
+    jmpNode->val = val;
+    return (struct astnode_hdr*)jmpNode;
 }

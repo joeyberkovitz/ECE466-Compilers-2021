@@ -10,6 +10,7 @@ void* mallocSafe(size_t size);
 
 void printTabs1(int lvl);
 void printAst(struct astnode_hdr *hdr, int lvl);
+void dumpStatements(struct astnode_lst *stmtLst, int level);
 
 struct astnode_hdr {
     enum node_type type;
@@ -50,6 +51,35 @@ struct astnode_fncn {
     struct astnode_lst *lst;
 };
 
+enum ctrl_type {
+    CTRL_IF,
+    CTRL_SWITCH,
+    CTRL_WHILE,
+    CTRL_DO,
+    CTRL_FOR
+};
+
+struct astnode_ctrl {
+    struct astnode_hdr;
+    enum ctrl_type ctrlType;
+    struct astnode_hdr *ctrlExpr; //for FOR loop - expect a list here
+    struct astnode_hdr *stmt;
+    struct astnode_hdr *stmtSecondary;
+};
+
+enum jump_type {
+    JUMP_GOTO,
+    JUMP_CONT,
+    JUMP_BREAK,
+    JUMP_RET
+};
+
+struct astnode_jump {
+    struct astnode_hdr;
+    enum jump_type jumpType;
+    struct astnode_hdr *val; //Ident for GOTO, expression for RETURN
+};
+
 struct astnode_hdr*  allocUnop(struct astnode_hdr *opand, int opType);
 struct astnode_hdr*  allocBinop(struct astnode_hdr *left, struct astnode_hdr *right, int opType);
 struct astnode_hdr*  allocTerop(struct astnode_hdr *first, struct astnode_hdr *second, struct astnode_hdr *third);
@@ -79,8 +109,8 @@ enum symtab_type {
     ENTRY_STAG,
     ENTRY_UTAG,
     ENTRY_SMEM,
-    ENTRY_UMEM
-    // TODO: labels
+    ENTRY_UMEM,
+    ENTRY_LABEL
 };
 
 enum symtab_ns {
@@ -99,7 +129,10 @@ enum symtab_scope {
     //Not per spec, but indicates in struct
     //only store members instead of variables
     //nested structs go in outer scope
-    SCOPE_STRUCT
+    SCOPE_STRUCT,
+
+    //Not per spec, but allows for handling switch cases
+    SCOPE_SWITCH
 };
 
 struct symtab;
@@ -110,7 +143,7 @@ union symtab_entry {
     struct astnode_memb *memb;
     struct astnode_fncndec *fncn;
     struct astnode_tag *tag;
-    // TODO: labels
+    struct astnode_label *label;
 };
 
 enum linkage_type {
@@ -197,7 +230,13 @@ struct astnode_tag {
     struct symtab *container;
 };
 
-/* TODO: labels at label-statements */
+struct astnode_label {
+    struct symtab_entry_generic;
+
+    //Label specific info:
+    struct astnode_lst *stmtLst; //List of statements
+    int stmtIdx; //Idx of statement after label
+};
 
 // header for type specifiers, pointers and arrays
 struct astnode_spec_inter {
@@ -245,6 +284,8 @@ struct symtab {
     union symtab_entry head;
     char *file;
     int line;
+
+    struct astnode_lst *stmtList; //List of statements for function/block
 };
 
 struct symtab_struct {
@@ -264,6 +305,7 @@ struct symtab* symtabCreate(enum symtab_scope scope, enum tab_type tabType, stru
 //Traverse up to parent scope without destroying current scope (ex: for struct sym tables)
 void exitScope();
 void enterBlockScope(struct LexVal *lexVal);
+void enterSwitchScope(struct LexVal *lexVal);
 void enterFuncScope(struct astnode_hdr* func);
 union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name, bool singleScope, enum linkage_type linkage);
 struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace);
@@ -307,6 +349,12 @@ void printTabs2(bool func, long level, long castLevel);
 void printArgs(struct astnode_fncndec *fncn, struct symtab *symtab, bool func, long level, long castLevel);
 void printStruct(struct astnode_hdr *structHdr);
 
+void addStmt(struct symtab *symtab, struct astnode_hdr *stmt);
+struct astnode_hdr* genNoopStmt();
+void addLabel(struct LexVal *ident, struct symtab *symtab);
+struct astnode_hdr* genCtrl(enum ctrl_type ctrlType, struct astnode_hdr *expr, struct astnode_hdr *stmt,
+                            struct astnode_hdr *stmtAlt, struct astnode_hdr *expr2, struct astnode_hdr *expr3);
+struct astnode_hdr* genJump(enum jump_type jumpType, struct astnode_hdr *val);
 
 struct symtab *currTab;
 union symtab_entry currDecl;

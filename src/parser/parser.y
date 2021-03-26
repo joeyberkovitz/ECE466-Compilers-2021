@@ -56,6 +56,18 @@
 %token <lexNode> RESTRICT
 %token <lexNode> VOLATILE
 %token <lexNode> ELLIPSIS
+%token <lexNode> CASE
+%token <lexNode> DEFAULT
+%token <lexNode> IF
+%token <lexNode> ELSE
+%token <lexNode> SWITCH
+%token <lexNode> WHILE
+%token <lexNode> DO
+%token <lexNode> FOR
+%token <lexNode> GOTO
+%token <lexNode> BREAK
+%token <lexNode> CONTINUE
+%token <lexNode> RETURN
 
     /* Expressions */
 %type  <hdr> expression
@@ -109,6 +121,15 @@
 %type  <specInter> start-parentheses
 %type  <fncndec> start-func-subroutine
 
+    /* Statements */
+%type  <hdr> statement
+%type  <hdr> compound-statement
+%type  <hdr> expression-statement
+%type  <hdr> labeled-statement
+%type  <hdr> selection-statement
+%type  <hdr> iteration-statement
+%type  <hdr> jump-statement
+
 
 %initial-action {
     //Space to perform initialization actions at beginning of yyparse()
@@ -145,14 +166,25 @@ function-definition:
 
     /* 6.8 - Statements and blocks */
 statement:
-        compound-statement
-    |   expression-statement
+        compound-statement              {$$=$1;}
+    |   expression-statement            {$$=$1;}
+    |   labeled-statement               {$$=$1;}
+    |   selection-statement             {$$=$1;}
+    |   iteration-statement             {$$=$1;}
+    |   jump-statement                  {$$=$1;}
+    ;
+
+    /* 6.8.1 - Labeled statements */
+labeled-statement:
+        IDENT ':' statement                         {$$=$3; addLabel($1, currTab);}
+    |   CASE constant-expression ':' statement      {$$=$4;/*TODO: implement*/}
+    |   DEFAULT ':' statement                       {$$=$3;/*TODO: implement*/}
     ;
 
     /* 6.8.2 - Compound statements */
 compound-statement:
-        '{' {enterBlockScope($1);clearEntry(currDecl);} block-item-list '}'    {exitScope();}
-    |   '{' '}' {enterBlockScope($1); exitScope(); clearEntry(currDecl); /*Specifically for entering/exiting function scope*/}
+        '{' {enterBlockScope($1);clearEntry(currDecl);} block-item-list '}'    {$$=(struct astnode_hdr*)currTab->stmtList; exitScope();}
+    |   '{' '}' {enterBlockScope($1); $$=(struct astnode_hdr*)currTab->stmtList; exitScope(); clearEntry(currDecl); /*Specifically for entering/exiting function scope*/}
     ;
 
 block-item-list:
@@ -162,13 +194,36 @@ block-item-list:
 
 block-item:
         declaration
-    |   statement
+    |   statement                   {addStmt(currTab, $1);}
     ;
 
     /* 6.8.3 - Expression and null statements */
 expression-statement:
-        ';'
-    |   expression ';'            {printAst($1, 0);}
+        ';'                       {$$=genNoopStmt(); /* Want this stmt to exist for label purposes */}
+    |   expression ';'            {$$=$1;}
+    ;
+
+    /* 6.8.4 - Selection statement */
+selection-statement:
+        IF '(' expression ')' statement                     {$$=genCtrl(CTRL_IF, $3, $5, NULL, NULL, NULL);}
+    |   IF '(' expression ')' statement ELSE statement      {$$=genCtrl(CTRL_IF, $3, $5, $7, NULL, NULL);}
+    |   SWITCH '(' expression ')' {enterSwitchScope($1);} statement  {exitScope(); $$=genCtrl(CTRL_SWITCH, $3, $6, NULL, NULL, NULL);}
+    ;
+
+    /* 6.8.5 - Iteration statement */
+iteration-statement:
+        WHILE '(' expression ')' statement                  {$$=genCtrl(CTRL_WHILE, $3, $5, NULL, NULL, NULL);}
+    |   DO statement WHILE '(' expression ')' ';'           {$$=genCtrl(CTRL_DO, $5, $2, NULL, NULL, NULL);}
+    |   FOR '(' expression-statement expression-statement expression-statement ')' statement    {$$=genCtrl(CTRL_FOR, $3, $7, NULL, $4, $5);}
+    /*TODO: do we want to handle declaration in FOR*/
+    ;
+
+    /* 6.8.6 - Jump statement */
+jump-statement:
+        GOTO IDENT ';'                  {$$=genJump(JUMP_GOTO, (struct astnode_hdr*)$2);}
+    |   CONTINUE ';'                    {$$=genJump(JUMP_CONT, NULL);}
+    |   BREAK ';'                       {$$=genJump(JUMP_BREAK, NULL);}
+    |   RETURN expression-statement     {$$=genJump(JUMP_RET, $2);}
     ;
 
     /* TODO: 6.6 - Constant expressions; once we do statements */

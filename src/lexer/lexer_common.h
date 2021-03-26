@@ -27,7 +27,10 @@ enum node_type {
     NODE_TYPESPEC,
     NODE_ARY,
     NODE_PTR,
-    NODE_FNCNDEC
+    NODE_FNCNDEC,
+    NODE_NOOP, //For recording presence of empty statement
+    NODE_CTRL,
+    NODE_JMP
 };
 typedef union {
 	unsigned long long int integer_val;
@@ -99,7 +102,9 @@ union astnode {
     struct astnode_fncndec *fncndec;
     struct astnode_tag *tag;
     struct astnode_struct *nodeStruct;
-    // TODO: labels
+    struct astnode_label *label;
+    struct astnode_ctrl *ctrl;
+    struct astnode_jump *jump;
 
     struct astnode_ptr *ptr;
     struct astnode_spec_inter *specInter;
