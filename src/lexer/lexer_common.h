@@ -70,7 +70,6 @@ enum token_flag {
     flag_hex = 0x04
 };
 
-//TODO: change this to something more useful
 typedef union {
 	char *string_val;
 	NUMTYPE num_val;

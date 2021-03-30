@@ -18,10 +18,43 @@ void yyerror(char const* s){
     fprintf(stderr, "%s:%d: Error: %s\n", currFile, currLine, s);
 }
 
+struct astnode_hdr* exprAssocVar(struct astnode_hdr *opand, enum symtab_ns ns, struct symtab *tab, bool isFunc){
+    struct LexVal *lexNode;
+    char *name;
+    if(opand->type != NODE_LEX) return opand;
+    lexNode = (struct LexVal*)opand;
+    if(lexNode->sym != IDENT) return opand;
+
+    if(lexNode->value.string_val == NULL){
+        fprintf(stderr, "Error: received LexVal of type IDENT without identifier\n");
+        exit(EXIT_FAILURE);
+    }
+    name = lexNode->value.string_val;
+
+    union symtab_entry entry = symtabLookup(tab, ns, name, false, -1);
+    if(entry.generic == NULL && !isFunc){
+        fprintf(stderr, "Error: failed to find IDENT '%s' in symtab", name);
+        exit(EXIT_FAILURE);
+    }
+    else if(entry.generic == NULL && isFunc){
+        fprintf(stderr, "Warning: implicit declaration of function %s\n", name);
+        //TODO: is this the right way to insert a basic function declaration?
+        struct astnode_fncndec *fncndec = startFuncDecl(false, (struct LexVal*)opand);
+        exitScope();
+        fncndec->ident = (struct LexVal*)opand;
+        fncndec->ns = OTHER;
+        fncndec->stgclass = STG_EXTERN;
+        symtabEnter(currTab, (union symtab_entry)fncndec, false);
+        return (struct astnode_hdr*)fncndec;
+    }
+
+    return (struct astnode_hdr*)entry.generic;
+}
+
 struct astnode_hdr* allocUnop(struct astnode_hdr *opand, int opType){
     struct astnode_unop *retNode = mallocSafe(sizeof(struct astnode_unop));
     retNode->type = NODE_UNOP;
-    retNode->opand = opand;
+    retNode->opand = exprAssocVar(opand, OTHER, currTab, false);
     retNode->op = opType;
     return (struct astnode_hdr *) retNode;
 }
@@ -29,8 +62,8 @@ struct astnode_hdr* allocUnop(struct astnode_hdr *opand, int opType){
 struct astnode_hdr* allocBinop(struct astnode_hdr *left, struct astnode_hdr *right, int opType){
     struct astnode_binop *retNode = mallocSafe(sizeof(struct astnode_binop));
     retNode->type = NODE_BINOP;
-    retNode->left = left;
-    retNode->right = right;
+    retNode->left = exprAssocVar(left, OTHER, currTab, false);
+    retNode->right = exprAssocVar(right, OTHER, currTab, false);
     retNode->op = opType;
     return (struct astnode_hdr *) retNode;
 }
@@ -38,9 +71,9 @@ struct astnode_hdr* allocBinop(struct astnode_hdr *left, struct astnode_hdr *rig
 struct astnode_hdr* allocTerop(struct astnode_hdr *first, struct astnode_hdr *second, struct astnode_hdr *third){
     struct astnode_terop *retNode = mallocSafe(sizeof(struct astnode_terop));
     retNode->type = NODE_TEROP;
-    retNode->first = first;
-    retNode->second = second;
-    retNode->third = third;
+    retNode->first = exprAssocVar(first, OTHER, currTab, false);
+    retNode->second = exprAssocVar(second, OTHER, currTab, false);
+    retNode->third = exprAssocVar(third, OTHER, currTab, false);
     return (struct astnode_hdr *) retNode;
 }
 
@@ -150,8 +183,8 @@ struct astnode_hdr* allocFunc(struct astnode_hdr *name, struct astnode_lst *lst)
     struct astnode_fncn *fncn = mallocSafe(sizeof(struct astnode_fncn));
 
     fncn->type = NODE_FNCN;
-    fncn->lst = lst;
-    fncn->name = name;
+    fncn->lst = lst; //TODO: verify that args are valid?
+    fncn->name = exprAssocVar(name, OTHER, currTab, true);
 
     return (struct astnode_hdr *) fncn;
 }
@@ -337,7 +370,6 @@ void exitScope(){
     if(currTab->scope == SCOPE_FUNC) {
         struct symtab_func *funcTab = ((struct symtab_func *) currTab);
         funcTab->parentFunc->defined = true;
-        //TODO: standardize print format
         printf("AST Dump for function %s {\n", funcTab->parentFunc->ident->value.string_val);
         dumpStatements(currTab->stmtList, 1);
         printf("}\n");
@@ -353,7 +385,6 @@ void dumpStatements(struct astnode_lst *stmtLst, int level){
 
     for(int i = 0; i < stmtLst->numVals; i++){
         if(stmtLst->els[i]->type == NODE_LST){
-            //TODO: standardize print format
             //This is a compound statement, recurse
             dumpStatements((struct astnode_lst*)stmtLst->els[i], level + 1);
         }
@@ -1343,8 +1374,10 @@ void printTabs1(int lvl){
 }
 
 void printAst(struct astnode_hdr *hdr, int lvl, bool isFunc){
-    //TODO: handle statements
     union astnode *node = (union astnode*) &hdr;
+    if(hdr->type == NODE_NOOP)
+        return;
+
     printTabs1(lvl);
 
     switch (hdr->type) {
@@ -1432,8 +1465,10 @@ void printAst(struct astnode_hdr *hdr, int lvl, bool isFunc){
         case NODE_TEROP:
             printf("TERNARY  OP,  IF:\n");
             printAst(node->terNode->first, lvl + 1, false);
+            printTabs1(lvl);
             printf("THEN:\n");
             printAst(node->terNode->second, lvl + 1, false);
+            printTabs1(lvl);
             printf("ELSE:\n");
             printAst(node->terNode->third, lvl + 1, false);
             break;
@@ -1442,18 +1477,23 @@ void printAst(struct astnode_hdr *hdr, int lvl, bool isFunc){
             printSpec(node->castNode->cast_spec, currTab, false, 0, lvl);
             printAst(node->castNode->opand, lvl + 1, false);
             break;
-        case NODE_LST:
-            for(int i = 0; i < node->lst->numVals; i++){
-                if(isFunc) {
-                    if(i > 0)
+        case NODE_LST: {
+            if (!isFunc) printf("LIST {\n");
+            for (int i = 0; i < node->lst->numVals; i++) {
+                if (isFunc) {
+                    if (i > 0)
                         printTabs1(lvl);
                     printf("arg  #%d=\n", i + 1);
                     printAst(node->lst->els[i], lvl + 1, true);
-                }
-                else
-                    printAst(node->lst->els[i], lvl, false);
+                } else
+                    printAst(node->lst->els[i], lvl + 1, false);
+            }
+            if (!isFunc) {
+                printTabs1(lvl);
+                printf("}\n");
             }
             break;
+        }
         case NODE_FNCN:
             printf("FNCALL,  %d  arguments\n", node->fncn->lst->numVals);
             printAst(node->fncn->name, lvl + 1, false);
@@ -1531,17 +1571,36 @@ void printAst(struct astnode_hdr *hdr, int lvl, bool isFunc){
             break;
         case NODE_SYMTAB: {
             switch (node->symEntry->st_type) {
+                case ENTRY_VAR:
+                    printf("stab_var name=%s def @%s:%d\n", node->symEntry->ident->value.string_val,
+                           node->symEntry->file, node->symEntry->line);
+                    break;
+                case ENTRY_FNCN:
+                    printf("stab_fn name=%s def @%s:%d\n", node->symEntry->ident->value.string_val,
+                           node->symEntry->file, node->symEntry->line);
+                    break;
                 case ENTRY_LABEL: {
+                    int labLvl = lvl + 1;
                     switch (node->label->labelType) {
                         case LAB_GENERIC:
                             printf("LABEL(%s):\n", ((struct LexVal*)node->label->exprNode)->value.string_val);
-                            printAst(node->label->stmtNode, lvl+1, false);
                             break;
                         case LAB_CASE:
+                            printf("CASE\n");
+
+                            printTabs1(lvl+1);
+                            printf("EXPR:\n");
+                            printAst(node->label->exprNode, lvl+2, false);
+
+                            printTabs1(lvl+1);
+                            printf("STMT:\n");
+                            labLvl++;
                             break;
                         case LAB_DEFAULT:
+                            printf("DEFAULT\n");
                             break;
                     }
+                    printAst(node->label->stmtNode, labLvl, false);
                     break;
                 }
                 default:
@@ -1565,7 +1624,6 @@ void printQual(enum qual_flag qflags){
 }
 
 void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum){
-    //TODO: properly handle label
     char *storage, *usage;
     switch(entry.generic->stgclass){
         case STG_TYPEDEF:
@@ -1589,6 +1647,7 @@ void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum){
         case SCOPE_FILE:
             scope = "global";
             break;
+        case SCOPE_SWITCH:
         case SCOPE_BLOCK:
             scope = "block";
             break;
@@ -1671,7 +1730,10 @@ void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum){
         if(entry.generic->stgclass != -1 || entry.generic->linkage == LINK_EXT)
             printf("with stgclass %s  ", storage);
 
-        printf("of type:\n  ");
+        if(entry.generic->ns == LABEL)
+            printf("\n");
+        else
+            printf("of type:\n  ");
     }
 
     struct astnode_spec_inter *child = entry.generic->child;
@@ -1870,20 +1932,19 @@ char* autoSprintf(long long inVal){
     return buff;
 }
 
-struct astnode_hdr* genLabel(enum label_type labelType, struct LexVal *ident, struct astnode_hdr *stmt, struct astnode_hdr *expr, struct symtab *symtab){
+struct astnode_hdr* genLabel(enum label_type labelType, struct LexVal *ident, struct astnode_hdr *stmt, struct symtab *symtab){
     struct astnode_label *label = (struct astnode_label*)allocEntry(ENTRY_LABEL, true);
     label->labelType = labelType;
     label->stmtNode = stmt;
-    label->exprNode = labelType == LAB_CASE ? expr : (struct astnode_hdr*)ident;
+    label->exprNode = (struct astnode_hdr*)ident; //For CASE, this is the actual int val, ident has string version
 
     label->ident = ident;
     if(labelType == LAB_CASE){
-        if(expr->type != NODE_LEX){
+        if(ident->type != NODE_LEX){
             fprintf(stderr, "Error inserting case, value isn't constant\n");
             exit(EXIT_FAILURE);
         }
         else{
-            struct LexVal *exprVal = (struct LexVal*)expr;
             struct LexVal *newIdent = (struct LexVal *)mallocSafe(sizeof(struct LexVal));
             newIdent->type = NODE_LEX;
             newIdent->sym = IDENT;
@@ -1891,11 +1952,10 @@ struct astnode_hdr* genLabel(enum label_type labelType, struct LexVal *ident, st
             newIdent->line = ident->line;
             newIdent->flags = 0;
             newIdent->tflags = 0;
-            switch (exprVal->sym) {
+            switch (ident->sym) {
                 case NUMBER:
-                    if(hasFlag(exprVal->tflags, int_type) || hasFlag(exprVal->tflags, lint_type) || hasFlag(exprVal->tflags, llint_type)) {
-                        newIdent->value.string_val = autoSprintf(exprVal->value.num_val.integer_val);
-                        ident = newIdent;
+                    if(hasFlag(ident->tflags, int_type) || hasFlag(ident->tflags, lint_type) || hasFlag(ident->tflags, llint_type)) {
+                        newIdent->value.string_val = autoSprintf(ident->value.num_val.integer_val);
                     }
                     else{
                         fprintf(stderr, "Error: case expression is not integer\n");
@@ -1903,15 +1963,21 @@ struct astnode_hdr* genLabel(enum label_type labelType, struct LexVal *ident, st
                     }
                     break;
                 case CHARLIT:
-                    newIdent->value.string_val = exprVal->value.string_val;
-                    ident = newIdent;
+                    newIdent->value.string_val = ident->value.string_val;
                     break;
                 default:
-                    fprintf(stderr, "Error: invalid case constant of LexVal sym type %d\n", exprVal->sym);
+                    fprintf(stderr, "Error: invalid case constant of LexVal sym type %d\n", ident->sym);
                     exit(EXIT_FAILURE);
             }
+            label->ident = newIdent;
         }
     }
+    else if(labelType == LAB_DEFAULT){
+        char *identVal = mallocSafe(8);
+        strcpy(identVal, "DEFAULT");
+        ident->value.string_val = identVal;
+    }
+
 
 
     label->line = ident->line;
@@ -1930,8 +1996,8 @@ struct astnode_hdr* genCtrl(enum ctrl_type ctrlType, struct astnode_hdr *expr, s
     selStmt->ctrlType = ctrlType;
     if(ctrlType == CTRL_FOR) {
         struct astnode_lst *exprLst = (struct astnode_lst*)allocList(expr);
-        addToList(exprLst, expr3);
         addToList(exprLst, expr2);
+        addToList(exprLst, expr3);
         selStmt->ctrlExpr = (struct astnode_hdr*)exprLst;
     }
     else
