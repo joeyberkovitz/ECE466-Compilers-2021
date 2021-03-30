@@ -10,7 +10,6 @@
 	#include <stdlib.h>
 	#include <printf.h>
 
-    //TODO: if setting sym here, should also set in places where RET macro isn't used
 	#define RET(x) processLine();yylval.lexNode->sym = x;return x;
 	#define RETINT(t,b) processLine();setInt(yylval, yytext, t, b);yylval.lexNode->sym = NUMBER;return NUMBER;
 	#define RETFLT(t) processLine();setFloat(yylval, yytext, t);yylval.lexNode->sym = NUMBER;return NUMBER;

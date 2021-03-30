@@ -131,6 +131,8 @@
 %type  <hdr> iteration-statement
 %type  <hdr> jump-statement
 
+%nonassoc "IFTHEN"
+%nonassoc ELSE
 
 %initial-action {
     //Space to perform initialization actions at beginning of yyparse()
@@ -177,9 +179,9 @@ statement:
 
     /* 6.8.1 - Labeled statements */
 labeled-statement:
-        IDENT ':' statement                         {$$=genLabel(LAB_GENERIC, $1, $3, NULL, currTab);}
-    |   CASE constant-expression ':' statement      {$$=genLabel(LAB_CASE, $1, $4, $2, currTab);}
-    |   DEFAULT ':' statement                       {$$=genLabel(LAB_DEFAULT, $1, $3, NULL, currTab);}
+        IDENT ':' statement                         {$$=genLabel(LAB_GENERIC, $1, $3, currTab);}
+    |   CASE constant-expression ':' statement      {$$=genLabel(LAB_CASE, (struct LexVal*)$2, $4, currTab);}
+    |   DEFAULT ':' statement                       {$$=genLabel(LAB_DEFAULT, $1, $3, currTab);}
     ;
 
     /* 6.8.2 - Compound statements */
@@ -206,7 +208,7 @@ expression-statement:
 
     /* 6.8.4 - Selection statement */
 selection-statement:
-        IF '(' expression ')' statement                     {$$=genCtrl(CTRL_IF, $3, $5, NULL, NULL, NULL);}
+        IF '(' expression ')' statement %prec "IFTHEN"      {$$=genCtrl(CTRL_IF, $3, $5, NULL, NULL, NULL);}
     |   IF '(' expression ')' statement ELSE statement      {$$=genCtrl(CTRL_IF, $3, $5, $7, NULL, NULL);}
     |   SWITCH '(' expression ')' {enterSwitchScope($1);} statement  {exitScope(); $$=genCtrl(CTRL_SWITCH, $3, $6, NULL, NULL, NULL);}
     ;
@@ -227,7 +229,6 @@ jump-statement:
     |   RETURN expression-statement     {$$=genJump(JUMP_RET, $2);}
     ;
 
-    /* TODO: 6.6 - Constant expressions; once we do statements */
     /* 6.6 - constant expressions */
 constant-expression:
         conditional-expression              {$$=$1; /*TODO: make sure we have a computed value here*/}
@@ -341,7 +342,7 @@ cast-expression:
 
     /* 6.5.3 - Unary expressions */
 unary-expression:
-        postfix-expression             {$$ = $1;}
+        postfix-expression             {$$ = exprAssocVar($1, OTHER, currTab, false);}
     |   PLUSPLUS unary-expression      {$$ = allocPostIncDec($1, $2, '+');}
     |   MINUSMINUS unary-expression    {$$ = allocPostIncDec($1, $2, '-');}
     |   unary-operator cast-expression {$$ = allocUnop($2, $1->sym);}
@@ -363,7 +364,7 @@ postfix-expression:
     /* compound literals excluded from compiler */
         primary-expression                                  {$$ = $1;}
         /* TODO: check types; Array subscripting: $1 should be pointer, $3 should be offset */
-    |   postfix-expression '[' expression ']'               {$$ = allocBinop($1, $3, '+');}
+    |   postfix-expression '[' expression ']'               {$$ = allocUnop(allocBinop($1, $3, '+'), '*');}
     |   postfix-expression '(' argument-expression-list ')' {$$ = allocFunc($1, $3);}
     |   postfix-expression '(' ')'                          {$$ = allocFunc($1, allocList(NULL));}
     |   postfix-expression '.' IDENT                        {$3->sym = IDENT; $$ = allocBinop($1, (struct astnode_hdr*)$3, '.');}

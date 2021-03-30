@@ -324,6 +324,7 @@ void checkVoid();
 int checkStructValidity();
 bool checkCompatibility(struct astnode_spec_inter *entry1, struct astnode_spec_inter *entry2, struct symtab *symtab, bool qual);
 bool checkCompatibilityFncn(struct astnode_fncndec *entry1, struct astnode_fncndec *entry2, struct symtab *symtab);
+struct astnode_hdr* exprAssocVar(struct astnode_hdr *opand, enum symtab_ns ns, struct symtab *tab, bool isFunc);
 
 struct symtab_entry_generic* allocEntry(enum symtab_type type, bool clear);
 struct symtab_entry_generic* clearEntry(union symtab_entry entry);
@@ -359,7 +360,8 @@ void printStruct(struct astnode_hdr *structHdr);
 
 void addStmt(struct symtab *symtab, struct astnode_hdr *stmt);
 struct astnode_hdr* genNoopStmt();
-struct astnode_hdr* genLabel(enum label_type labelType, struct LexVal *ident, struct astnode_hdr *stmt, struct astnode_hdr *expr, struct symtab *symtab);
+char* autoSprintf(long long inVal);
+struct astnode_hdr* genLabel(enum label_type labelType, struct LexVal *ident, struct astnode_hdr *stmt, struct symtab *symtab);
 struct astnode_hdr* genCtrl(enum ctrl_type ctrlType, struct astnode_hdr *expr, struct astnode_hdr *stmt,
                             struct astnode_hdr *stmtAlt, struct astnode_hdr *expr2, struct astnode_hdr *expr3);
 struct astnode_hdr* genJump(enum jump_type jumpType, struct astnode_hdr *val);
