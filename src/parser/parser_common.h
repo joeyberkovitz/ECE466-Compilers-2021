@@ -10,6 +10,7 @@ void* mallocSafe(size_t size);
 
 void printTabs1(int lvl);
 void printAst(struct astnode_hdr *hdr, int lvl, bool isFunc);
+void printFunc();
 void dumpStatements(struct astnode_lst *stmtLst, int level);
 
 struct astnode_hdr {

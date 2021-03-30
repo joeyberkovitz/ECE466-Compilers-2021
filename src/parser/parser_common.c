@@ -337,32 +337,11 @@ void exitScope(){
     if(currTab->scope == SCOPE_FUNC) {
         struct symtab_func *funcTab = ((struct symtab_func *) currTab);
         funcTab->parentFunc->defined = true;
-        //TODO: standardize print format
-        printf("AST Dump for function %s {\n", funcTab->parentFunc->ident->value.string_val);
-        dumpStatements(currTab->stmtList, 1);
-        printf("}\n");
 
+        printFunc();
     }
     
     currTab = currTab->parent;
-}
-
-void dumpStatements(struct astnode_lst *stmtLst, int level){
-    printTabs1(level);
-    printf("LIST {\n");
-
-    for(int i = 0; i < stmtLst->numVals; i++){
-        if(stmtLst->els[i]->type == NODE_LST){
-            //TODO: standardize print format
-            //This is a compound statement, recurse
-            dumpStatements((struct astnode_lst*)stmtLst->els[i], level + 1);
-        }
-        else
-            printAst(stmtLst->els[i], level + 1, false);
-    }
-
-    printTabs1(level);
-    printf("}\n");
 }
 
 void enterBlockScope(struct LexVal *lexVal){
@@ -1339,7 +1318,7 @@ void freeInterNodes(){
 
 void printTabs1(int lvl){
     for(int i = 0; i < lvl; i++)
-        printf("  ");
+        printf(" ");
 }
 
 void printAst(struct astnode_hdr *hdr, int lvl, bool isFunc){
@@ -1846,6 +1825,31 @@ void printStruct(struct astnode_hdr *structHdr){
     }
 
     printf("} (size==%zu)\n\n", getStructSize(structNode, false));
+}
+
+void printFunc(){
+    //TODO: standardize print format
+    printf("AST Dump for function\n");
+    dumpStatements(currTab->stmtList, 1);
+    printf("}\n");
+}
+
+void dumpStatements(struct astnode_lst *stmtLst, int level){
+    printTabs1(level);
+    printf("LIST {\n");
+
+    for(int i = 0; i < stmtLst->numVals; i++){
+        if(stmtLst->els[i]->type == NODE_LST){
+            //TODO: standardize print format
+            //This is a compound statement, recurse
+            dumpStatements((struct astnode_lst*)stmtLst->els[i], level + 1);
+        }
+        else
+            printAst(stmtLst->els[i], level + 1, false);
+    }
+
+    printTabs1(level);
+    printf("}\n");
 }
 
 void addStmt(struct symtab *symtab, struct astnode_hdr *stmt){
