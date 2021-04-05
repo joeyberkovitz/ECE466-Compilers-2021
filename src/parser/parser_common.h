@@ -8,7 +8,6 @@ int yylex(void);
 void yyerror(char const*);
 void* mallocSafe(size_t size);
 
-void printTabs1(int lvl);
 void printAst(struct astnode_hdr *hdr, int lvl, bool isFunc);
 void printFunc();
 void dumpStatements(struct astnode_lst *stmtLst, int level);
@@ -66,6 +65,11 @@ struct astnode_ctrl {
     struct astnode_hdr *ctrlExpr; //for FOR loop - expect a list here
     struct astnode_hdr *stmt;
     struct astnode_hdr *stmtSecondary;
+
+    // for switch
+    struct astnode_lst *caseList;
+    struct astnode_hdr *dflt;
+    struct astnode_ctrl *outerSwtch;
 };
 
 enum jump_type {
@@ -131,9 +135,6 @@ enum symtab_scope {
     //only store members instead of variables
     //nested structs go in outer scope
     SCOPE_STRUCT,
-
-    //Not per spec, but allows for handling switch cases
-    SCOPE_SWITCH
 };
 
 struct symtab;
@@ -243,7 +244,7 @@ struct astnode_label {
     //Label specific info:
     enum label_type labelType;
     struct astnode_hdr *stmtNode;
-    struct astnode_hdr *exprNode; //For case this is expression, for regular this is ident
+    struct astnode_hdr *exprNode; //for case label
 };
 
 // header for type specifiers, pointers and arrays
@@ -293,7 +294,9 @@ struct symtab {
     char *file;
     int line;
 
+    bool forDecl; //To signify in for declarations
     struct astnode_lst *stmtList; //List of statements for function/block
+    struct astnode_ctrl *swtch; //Link to closest switch statement, if any
 };
 
 struct symtab_struct {
@@ -313,7 +316,6 @@ struct symtab* symtabCreate(enum symtab_scope scope, enum tab_type tabType, stru
 //Traverse up to parent scope without destroying current scope (ex: for struct sym tables)
 void exitScope();
 void enterBlockScope(struct LexVal *lexVal);
-void enterSwitchScope(struct LexVal *lexVal);
 void enterFuncScope(struct astnode_hdr* func);
 union symtab_entry symtabLookup(struct symtab *symtab, enum symtab_ns ns, char *name, bool singleScope, enum linkage_type linkage);
 struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_entry entry, bool replace);
@@ -324,7 +326,7 @@ void checkVoid();
 int checkStructValidity();
 bool checkCompatibility(struct astnode_spec_inter *entry1, struct astnode_spec_inter *entry2, struct symtab *symtab, bool qual);
 bool checkCompatibilityFncn(struct astnode_fncndec *entry1, struct astnode_fncndec *entry2, struct symtab *symtab);
-struct astnode_hdr* exprAssocVar(struct astnode_hdr *opand, enum symtab_ns ns, struct symtab *tab, bool isFunc);
+struct astnode_hdr* exprAssocVar(struct astnode_hdr *opand, enum symtab_ns ns, struct symtab *tab);
 
 struct symtab_entry_generic* allocEntry(enum symtab_type type, bool clear);
 struct symtab_entry_generic* clearEntry(union symtab_entry entry);
@@ -354,17 +356,19 @@ struct astnode_fncndec* addFuncArgs(struct astnode_lst *args, struct symtab *sym
 void printDecl(struct symtab *symtab, union symtab_entry entry, long argNum);
 void printSpec(struct astnode_spec_inter *next, struct symtab *symtab, bool func, long level, long castLevel);
 void printQual(enum qual_flag qflags);
-void printTabs2(bool func, long level, long castLevel);
+void printTabs(bool func, long level, long castLevel);
 void printArgs(struct astnode_fncndec *fncn, struct symtab *symtab, bool func, long level, long castLevel);
 void printStruct(struct astnode_hdr *structHdr);
 
 void addStmt(struct symtab *symtab, struct astnode_hdr *stmt);
 struct astnode_hdr* genNoopStmt();
 char* autoSprintf(long long inVal);
-struct astnode_hdr* genLabel(enum label_type labelType, struct LexVal *ident, struct astnode_hdr *stmt, struct symtab *symtab);
+struct astnode_hdr* genLabel(enum label_type labelType, struct astnode_hdr *val, struct astnode_hdr *stmt, struct symtab *symtab);
 struct astnode_hdr* genCtrl(enum ctrl_type ctrlType, struct astnode_hdr *expr, struct astnode_hdr *stmt,
-                            struct astnode_hdr *stmtAlt, struct astnode_hdr *expr2, struct astnode_hdr *expr3);
-struct astnode_hdr* genJump(enum jump_type jumpType, struct astnode_hdr *val);
+                            struct astnode_hdr *stmtAlt, struct astnode_hdr *expr2, struct astnode_hdr *expr3,
+                            struct symtab *symtab);
+void setSwitchStmt(struct astnode_hdr *swtch, struct astnode_hdr *stmt, struct symtab *symtab);
+struct astnode_hdr* genJump(enum jump_type jumpType, struct astnode_hdr *val, struct symtab *symtab);
 
 struct symtab *currTab;
 union symtab_entry currDecl;

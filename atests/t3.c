@@ -1,10 +1,10 @@
-int s()
+int s(char *c)
 {
  int i;
 	switch(i)
 	{
-	 case 1:printf("one\n");break;
-	 case 2:printf("two\n");
-	 default:printf("more\n");
+	 case 1:s("one\n");break;
+	 case 2:s("two\n");
+	 default:s("more\n");
 	}
 }

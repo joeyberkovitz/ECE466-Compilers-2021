@@ -75,7 +75,7 @@
 %type  <hdr> postfix-expression
 %type  <lst> argument-expression-list
 %type  <hdr> unary-expression
-%type  <lexNode> '=' '&' '*' '+' '-' '~' '{'
+%type  <lexNode> '=' '&' '*' '+' '-' '~' '{' '('
 %type  <lexNode> unary-operator
 %type  <hdr> cast-expression
 %type  <hdr> multiplicative-expression
@@ -129,6 +129,7 @@
 %type  <hdr> labeled-statement
 %type  <hdr> selection-statement
 %type  <hdr> iteration-statement
+%type  <hdr> for-end
 %type  <hdr> jump-statement
 
 %nonassoc "IFTHEN"
@@ -179,9 +180,9 @@ statement:
 
     /* 6.8.1 - Labeled statements */
 labeled-statement:
-        IDENT ':' statement                         {$$=genLabel(LAB_GENERIC, $1, $3, currTab);}
-    |   CASE constant-expression ':' statement      {$$=genLabel(LAB_CASE, (struct LexVal*)$2, $4, currTab);}
-    |   DEFAULT ':' statement                       {$$=genLabel(LAB_DEFAULT, $1, $3, currTab);}
+        IDENT ':' statement                         {$$=genLabel(LAB_GENERIC, (struct astnode_hdr*)$1, $3, currTab);}
+    |   CASE constant-expression ':' statement      {$$=genLabel(LAB_CASE, $2, $4, currTab);}
+    |   DEFAULT ':' statement                       {$$=genLabel(LAB_DEFAULT, NULL, $3, currTab);}
     ;
 
     /* 6.8.2 - Compound statements */
@@ -208,30 +209,35 @@ expression-statement:
 
     /* 6.8.4 - Selection statement */
 selection-statement:
-        IF '(' expression ')' statement %prec "IFTHEN"      {$$=genCtrl(CTRL_IF, $3, $5, NULL, NULL, NULL);}
-    |   IF '(' expression ')' statement ELSE statement      {$$=genCtrl(CTRL_IF, $3, $5, $7, NULL, NULL);}
-    |   SWITCH '(' expression ')' {enterSwitchScope($1);} statement  {exitScope(); $$=genCtrl(CTRL_SWITCH, $3, $6, NULL, NULL, NULL);}
+        IF '(' expression ')' statement %prec "IFTHEN"      {$$=genCtrl(CTRL_IF, $3, $5, NULL, NULL, NULL, NULL);}
+    |   IF '(' expression ')' statement ELSE statement      {$$=genCtrl(CTRL_IF, $3, $5, $7, NULL, NULL, NULL);}
+    |   SWITCH '(' expression ')' {$<hdr>$ = genCtrl(CTRL_SWITCH, $3, NULL, NULL, NULL, NULL, currTab);} statement  {setSwitchStmt($<hdr>5, $6, currTab);$$=$<hdr>5;}
     ;
 
     /* 6.8.5 - Iteration statement */
 iteration-statement:
-        WHILE '(' expression ')' statement                  {$$=genCtrl(CTRL_WHILE, $3, $5, NULL, NULL, NULL);}
-    |   DO statement WHILE '(' expression ')' ';'           {$$=genCtrl(CTRL_DO, $5, $2, NULL, NULL, NULL);}
-    |   FOR '(' expression-statement expression-statement expression ')' statement    {$$=genCtrl(CTRL_FOR, $3, $7, NULL, $4, $5);}
-    /*TODO: do we want to handle declaration in FOR*/
+        WHILE '(' expression ')' statement                                                  {$$=genCtrl(CTRL_WHILE, $3, $5, NULL, NULL, NULL, NULL);}
+    |   DO statement WHILE '(' expression ')' ';'                                           {$$=genCtrl(CTRL_DO, $5, $2, NULL, NULL, NULL, NULL);}
+    |   FOR '(' {enterBlockScope($2);currTab->forDecl = true;clearEntry(currDecl);} for-end {$$=$4;}
     ;
+
+for-end:
+        expression-statement expression-statement expression ')' {currTab->forDecl = false;} statement {exitScope(); $$=genCtrl(CTRL_FOR, $1, $6, NULL, $2, $3, NULL);}
+    |   expression-statement expression-statement ')' {currTab->forDecl = false;}  statement           {exitScope(); $$=genCtrl(CTRL_FOR, $1, $5, NULL, $2, NULL, NULL);}
+    |   declaration expression-statement expression ')' {currTab->forDecl = false;} statement          {exitScope(); $$=genCtrl(CTRL_FOR, NULL, $6, NULL, $2, $3, NULL);}
+    |   declaration expression-statement ')' {currTab->forDecl = false;} statement                     {exitScope();$$=genCtrl(CTRL_FOR, NULL, $5, NULL, $2, NULL, NULL);}
 
     /* 6.8.6 - Jump statement */
 jump-statement:
-        GOTO IDENT ';'                  {$$=genJump(JUMP_GOTO, (struct astnode_hdr*)$2);}
-    |   CONTINUE ';'                    {$$=genJump(JUMP_CONT, NULL);}
-    |   BREAK ';'                       {$$=genJump(JUMP_BREAK, NULL);}
-    |   RETURN expression-statement     {$$=genJump(JUMP_RET, $2);}
+        GOTO IDENT ';'                  {$$=genJump(JUMP_GOTO, (struct astnode_hdr*)$2, NULL);}
+    |   CONTINUE ';'                    {$$=genJump(JUMP_CONT, NULL, NULL);}
+    |   BREAK ';'                       {$$=genJump(JUMP_BREAK, NULL, NULL);}
+    |   RETURN expression-statement     {$$=genJump(JUMP_RET, $2, currTab);}
     ;
 
     /* 6.6 - constant expressions */
 constant-expression:
-        conditional-expression              {$$=$1; /*TODO: make sure we have a computed value here*/}
+        conditional-expression              {$$ = $1; /*TODO: compute value at quad stage */}
     ;
 
     /* 6.5.17 - Comma expressions */
@@ -336,17 +342,17 @@ multiplicative-expression:
 
     /* 6.5.4 - Cast expressions */
 cast-expression:
-        unary-expression                  {$$ = $1;}
+        unary-expression  {$$ = $1;}
     |   '(' type-name ')' {$<castNode>$ = allocCast();} cast-expression {$<castNode>4->opand = $5; $$ = (struct astnode_hdr*)$<castNode>4;}
     ;
 
     /* 6.5.3 - Unary expressions */
 unary-expression:
-        postfix-expression             {$$ = exprAssocVar($1, OTHER, currTab, false);}
+        postfix-expression             {$$ = $1;}
     |   PLUSPLUS unary-expression      {$$ = allocPostIncDec($1, $2, '+');}
     |   MINUSMINUS unary-expression    {$$ = allocPostIncDec($1, $2, '-');}
     |   unary-operator cast-expression {$$ = allocUnop($2, $1->sym);}
-    /* TODO: compute sizeof for expression */
+    /* TODO: compute sizeof for expression at quad stage */
     |   SIZEOF unary-expression        {$$ = allocUnop($2, SIZEOF);}
     |   SIZEOF '(' type-name ')'       {$$ = allocSizeof();}
     ;
@@ -380,7 +386,7 @@ argument-expression-list:
 
     /* 6.5.1 - Primary expressions */
 primary-expression:
-        IDENT                   {$$ = (struct astnode_hdr*)$1;}
+        IDENT                   {$$ = exprAssocVar((struct astnode_hdr*)$1, OTHER, currTab);}
     |   NUMBER                  {$$ = (struct astnode_hdr*)$1;}
     |   CHARLIT                 {$$ = (struct astnode_hdr*)$1;}
     |   STRING                  {$$ = (struct astnode_hdr*)$1;}
