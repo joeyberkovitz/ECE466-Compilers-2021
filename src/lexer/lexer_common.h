@@ -30,7 +30,10 @@ enum node_type {
     NODE_FNCNDEC,
     NODE_NOOP, //For recording presence of empty statement
     NODE_CTRL,
-    NODE_JMP
+    NODE_JMP,
+    NODE_BASICBLOCK,
+    NODE_QUAD,
+    NODE_QUAD_VAL
 };
 typedef union {
 	unsigned long long int integer_val;

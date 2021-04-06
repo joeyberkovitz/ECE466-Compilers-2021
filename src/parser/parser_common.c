@@ -1,4 +1,5 @@
 #include "parser_common.h"
+#include "quad_common.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -2026,9 +2027,14 @@ void printStruct(struct astnode_hdr *structHdr){
 }
 
 void printFunc(){
+    static int funcIdx = 0;
     printf("AST Dump for function\n");
     dumpStatements(currTab->stmtList, 1);
     printf("\n");
+
+    genQuads(currTab->stmtList, NULL, funcIdx);
+
+    funcIdx++;
 }
 
 void dumpStatements(struct astnode_lst *stmtLst, int level){
