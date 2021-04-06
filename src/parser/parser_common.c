@@ -1,5 +1,5 @@
 #include "parser_common.h"
-#include "quad_common.h"
+#include "../quads/quad_common.h"
 #include <stdio.h>
 #include <stdlib.h>
 

@@ -1,7 +1,7 @@
 #ifndef QUAD_COMMON_H
 #define QUAD_COMMON_H
 
-#include "parser_common.h"
+#include "../parser/parser_common.h"
 
 enum quad_opcode {
     QOP_ADD,

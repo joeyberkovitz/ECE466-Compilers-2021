@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "quad_common.h"
-#include "lexer/lexer_common.h"
+#include "../lexer/lexer_common.h"
 
 struct basic_block* genBasicBlock(struct basic_block *prevBlock, int funcIdx){
     struct basic_block *newBlock = mallocSafe(sizeof(struct basic_block));
@@ -128,7 +128,9 @@ struct astnode_quad_node *genLval(struct astnode_hdr *node){
                 case ENTRY_VAR: {
                     struct astnode_quad_var *varNode = mallocSafe(sizeof(struct astnode_quad_var));
                     varNode->type = NODE_QUAD_VAL;
-                    varNode->quadType = QUADNODE_LOCAL; //This assumption is wrong - need a way to check if local/param/val (using stab)
+                    varNode->quadType =
+
+                            QUADNODE_LOCAL; //This assumption is wrong - need a way to check if local/param/val (using stab)
                     varNode->varNode = node;
                     return (struct astnode_quad_node *) varNode;
                 }

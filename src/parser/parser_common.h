@@ -1,7 +1,7 @@
 #ifndef PARSER_COMMON_H
 #define PARSER_COMMON_H
 
-#include "lexer/lexer_common.h"
+#include "../lexer/lexer_common.h"
 #include <stdbool.h>
 
 int yylex(void);

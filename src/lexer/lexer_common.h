@@ -10,7 +10,7 @@
 #include <printf.h>
 
 #include "ltests/tokens-manual.h"
-#include "parser/parser.y.o.h"
+#include "../parser/parser.y.o.h"
 
 #define hasFlag(x, flag)	((x & flag) == flag)
 
