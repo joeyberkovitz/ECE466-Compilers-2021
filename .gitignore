@@ -1,3 +1,6 @@
 build/*
 .idea/*
 *.swp
+*.compare.txt
+*.compare.out
+*.cE
