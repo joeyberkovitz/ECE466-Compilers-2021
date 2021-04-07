@@ -128,9 +128,8 @@ struct astnode_quad_node *genLval(struct astnode_hdr *node){
                 case ENTRY_VAR: {
                     struct astnode_quad_var *varNode = mallocSafe(sizeof(struct astnode_quad_var));
                     varNode->type = NODE_QUAD_VAL;
-                    varNode->quadType =
-
-                            QUADNODE_LOCAL; //This assumption is wrong - need a way to check if local/param/val (using stab)
+                    varNode->quadType = nodeUnion.symEntry->parentTab->scope == SCOPE_FILE ? QUADNODE_GLOBAL : (
+                        nodeUnion.symEntry->inProto ? QUADNODE_PARAM : QUADNODE_LOCAL );
                     varNode->varNode = node;
                     return (struct astnode_quad_node *) varNode;
                 }

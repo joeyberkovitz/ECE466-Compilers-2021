@@ -501,7 +501,7 @@ struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_ent
     }
 
     if(existingVal.generic != NULL && existingVal.generic->linkage != entry.generic->linkage){
-        fprintf(stderr, "%s:%d: Error: attemped redeclaration of '%s' with conflicting linkage\n", entry.generic->file, entry.generic->line, entry.generic->ident->value.string_val);
+        fprintf(stderr, "%s:%d: Error: attempted redeclaration of '%s' with conflicting linkage\n", entry.generic->file, entry.generic->line, entry.generic->ident->value.string_val);
         exit(EXIT_FAILURE);
     }
 
@@ -516,6 +516,10 @@ struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_ent
     }
 
     success:
+    if(existingVal.generic == NULL || replace) {
+        entry.generic->parentTab = symtab;
+        entry.generic->inProto = symtab->scope == SCOPE_PROTO;
+    }
     //Struct/union members will have printing occur later
     //Function prototype will be printed at end of prototype
     if(entry.generic->ns != TAG && entry.generic->ns != MEMBER && symtab->scope != SCOPE_PROTO)

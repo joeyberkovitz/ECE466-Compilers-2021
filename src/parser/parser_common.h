@@ -139,15 +139,6 @@ enum symtab_scope {
 
 struct symtab;
 
-union symtab_entry {
-    struct symtab_entry_generic *generic;
-    struct astnode_var *var;
-    struct astnode_memb *memb;
-    struct astnode_fncndec *fncn;
-    struct astnode_tag *tag;
-    struct astnode_label *label;
-};
-
 enum linkage_type {
     LINK_EXT,
     LINK_INT,
@@ -185,6 +176,8 @@ struct symtab_entry_generic {
     char *file;
     int line;
     enum linkage_type linkage;
+    struct symtab *parentTab;
+    bool inProto;
 
     //Specifiers
     enum storage_class stgclass;
@@ -282,6 +275,15 @@ struct astnode_ptr {
     enum qual_flag qtype;
 
     struct astnode_lst *type_quals;
+};
+
+union symtab_entry {
+    struct symtab_entry_generic *generic;
+    struct astnode_var *var;
+    struct astnode_memb *memb;
+    struct astnode_fncndec *fncn;
+    struct astnode_tag *tag;
+    struct astnode_label *label;
 };
 
 struct symtab {
