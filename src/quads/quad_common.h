@@ -56,7 +56,7 @@ struct astnode_quad {
     struct basic_block *parentBlock;
     struct astnode_quad *next, *prev;
 
-    struct astnode_quad *lval, *rval1, *rval2;
+    struct astnode_quad_node *lval, *rval1, *rval2;
     struct astnode_spec_inter *dataType;
 };
 
@@ -78,7 +78,7 @@ struct basic_block* genQuads(struct astnode_lst *stmtList, struct basic_block *p
 struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *lastQuad, struct astnode_quad **firstQuad);
 enum quad_opcode binopToQop(int op);
 struct astnode_quad_register *genRegister();
-struct astnode_quad_node *genLval(struct astnode_hdr *node);
+struct astnode_quad_node *genLval(struct astnode_hdr *node, struct astnode_quad **lastQuad);
 
 
 #endif //QUAD_COMMON_H

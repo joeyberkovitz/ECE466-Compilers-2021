@@ -51,8 +51,9 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
             switch (stmtUnion.binNode->op) {
                 case '=':
                     newQuad->opcode = binopToQop(stmtUnion.binNode->op);
-                    newQuad->lval = (struct astnode_quad*)genLval(stmtUnion.binNode->left);
-                    lastQuad = newQuad->rval1 = stmtToQuad(stmtUnion.binNode->right, lastQuad, firstQuad);
+                    newQuad->lval = genLval(stmtUnion.binNode->left, &lastQuad);
+                    lastQuad = stmtToQuad(stmtUnion.binNode->right, lastQuad, firstQuad);
+                    newQuad->rval1 = lastQuad->lval;
                     break;
                 case '.': //TODO: do we want to support this?
                     fprintf(stderr, "Error: struct member access unimplemented\n");
@@ -61,9 +62,12 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                 case ',': //Probably best to break each comma into its own quad
                 default:
                     newQuad->opcode = binopToQop(stmtUnion.binNode->op);
-                    newQuad->lval = (struct astnode_quad*)genRegister();
-                    lastQuad = newQuad->rval1 = stmtToQuad(stmtUnion.binNode->left, lastQuad, firstQuad);
-                    lastQuad = newQuad->rval2 = stmtToQuad(stmtUnion.binNode->right, lastQuad, firstQuad);
+                    newQuad->lval = (struct astnode_quad_node*)genRegister();
+                    lastQuad = stmtToQuad(stmtUnion.binNode->left, lastQuad, firstQuad);
+                    newQuad->rval1 = lastQuad->lval;
+                    lastQuad = stmtToQuad(stmtUnion.binNode->right, lastQuad, firstQuad);
+                    newQuad->rval2 = lastQuad->lval;
+                    //TODO: type checking
             }
             break;
         }
@@ -117,7 +121,7 @@ struct astnode_quad_register *genRegister(){
     return newReg;
 }
 
-struct astnode_quad_node *genLval(struct astnode_hdr *node){
+struct astnode_quad_node *genLval(struct astnode_hdr *node, struct astnode_quad **lastQuad){
     //TODO: if var - assign to var node
     //TODO: if array - compute array offset as ptr, assign there
     //TODO: else - problem
@@ -131,11 +135,16 @@ struct astnode_quad_node *genLval(struct astnode_hdr *node){
                     varNode->quadType = nodeUnion.symEntry->parentTab->scope == SCOPE_FILE ? QUADNODE_GLOBAL : (
                         nodeUnion.symEntry->inProto ? QUADNODE_PARAM : QUADNODE_LOCAL );
                     varNode->varNode = node;
-                    return (struct astnode_quad_node *) varNode;
+                    return (struct astnode_quad_node*) varNode;
                 }
             }
             break;
         }
-
+        case NODE_UNOP: {
+            //If determine that new quads need to be emitted, call stmtToQuad using lastQuad, adjust lastQuad accordingly
+            break;
+        }
+        default:
+            //error
     }
 }
