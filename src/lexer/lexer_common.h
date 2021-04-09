@@ -35,6 +35,7 @@ enum node_type {
     NODE_QUAD,
     NODE_QUAD_VAL
 };
+
 typedef union {
 	unsigned long long int integer_val;
 	float float_val;
@@ -100,7 +101,7 @@ union astnode {
     struct astnode_fncn *fncn;
 
     struct symtab_entry_generic *symEntry;
-    struct astnode_varmem *varMem;
+    struct astnode_var *varMem;
     struct astnode_fncndec *fncndec;
     struct astnode_tag *tag;
     struct astnode_struct *nodeStruct;

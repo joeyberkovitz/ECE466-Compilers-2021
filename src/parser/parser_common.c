@@ -363,7 +363,7 @@ void exitScope(){
         struct symtab_func *funcTab = ((struct symtab_func *) currTab);
         funcTab->parentFunc->defined = true;
 
-        printFunc();
+        printFunc(funcTab->parentFunc->ident->value.string_val);
     }
     
     currTab = currTab->parent;
@@ -2030,13 +2030,13 @@ void printStruct(struct astnode_hdr *structHdr){
     printf("} (size==%zu)\n\n", getStructSize(structNode, false));
 }
 
-void printFunc(){
-    static int funcIdx = 0;
+void printFunc(char *fname){
+    static int funcIdx = 1;
     printf("AST Dump for function\n");
     dumpStatements(currTab->stmtList, 1);
     printf("\n");
 
-    genQuads(currTab->stmtList, NULL, funcIdx);
+    genQuads(currTab->stmtList, NULL, funcIdx, fname);
 
     funcIdx++;
 }

@@ -220,6 +220,7 @@ void addChars(char *txt, size_t len, int flags){
 void endString(union astnode val){
 	val.lexNode->value.string_val = currStr;
 	val.lexNode->len = currStrLen;
+	val.lexNode->tflags = char_type;
 	resetString();
 }
 
@@ -231,5 +232,6 @@ void endChar(union astnode val){
 	}
 	val.lexNode->value.string_val = currStr;
 	val.lexNode->len = 2;
+	val.lexNode->tflags = char_type;
 	resetString();
 }

@@ -9,7 +9,7 @@ void yyerror(char const*);
 void* mallocSafe(size_t size);
 
 void printAst(struct astnode_hdr *hdr, int lvl, bool isFunc);
-void printFunc();
+void printFunc(char *fname);
 void dumpStatements(struct astnode_lst *stmtLst, int level);
 
 struct astnode_hdr {
@@ -165,6 +165,15 @@ enum qual_flag {
     QUAL_VOLATILE = 0x4
 };
 
+union symtab_entry {
+    struct symtab_entry_generic *generic;
+    struct astnode_var *var;
+    struct astnode_memb *memb;
+    struct astnode_fncndec *fncn;
+    struct astnode_tag *tag;
+    struct astnode_label *label;
+};
+
 struct symtab_entry_generic {
     enum node_type type;
     struct astnode_spec_inter *parent, *child;
@@ -275,15 +284,6 @@ struct astnode_ptr {
     enum qual_flag qtype;
 
     struct astnode_lst *type_quals;
-};
-
-union symtab_entry {
-    struct symtab_entry_generic *generic;
-    struct astnode_var *var;
-    struct astnode_memb *memb;
-    struct astnode_fncndec *fncn;
-    struct astnode_tag *tag;
-    struct astnode_label *label;
 };
 
 struct symtab {
