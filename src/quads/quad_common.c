@@ -688,7 +688,7 @@ void printQuads(struct basic_block *basicBlock, char *fname){
                 case QOP_MUL: printf("MUL"); break;
                 case QOP_MOD: printf("MOD"); break;
                 case QOP_MOVE: printf("MOV"); break;
-                case QOP_LEA: printf("LAE"); break;
+                case QOP_LEA: printf("LEA"); break;
                 case QOP_ARG: printf("ARG"); break;
                 case QOP_CALL: printf("CALL"); break;
             }
