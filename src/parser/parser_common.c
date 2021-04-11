@@ -42,6 +42,11 @@ struct astnode_hdr* exprAssocVar(struct astnode_hdr *opand, enum symtab_ns ns, s
 }
 
 struct astnode_hdr* allocUnop(struct astnode_hdr *opand, int opType){
+    if (opType == '&' && opand->type == NODE_SYMTAB && ((struct symtab_entry_generic*)opand)->stgclass == STG_REGISTER){
+        fprintf(stderr, "%s:%d: Error: address of register variable '%s' requested\n", currFile, currLine, ((struct symtab_entry_generic*)opand)->ident->value.string_val);
+        exit(EXIT_FAILURE);
+    }
+
     struct astnode_unop *retNode = mallocSafe(sizeof(struct astnode_unop));
     retNode->type = NODE_UNOP;
     retNode->opand = opand;
@@ -67,7 +72,22 @@ struct astnode_hdr* allocTerop(struct astnode_hdr *first, struct astnode_hdr *se
     return (struct astnode_hdr *) retNode;
 }
 
-struct astnode_hdr* allocPostIncDec(struct LexVal *op, struct astnode_hdr *opand, int opType){
+struct astnode_hdr* allocConst(struct LexVal *op, int num){
+    struct LexVal *lexVal = mallocSafe(sizeof(struct LexVal));
+    lexVal->type = NODE_LEX;
+    if (op != NULL) {
+        lexVal->file = op->file;
+        lexVal->line = op->line;
+    }
+
+    lexVal->tflags = int_type;
+    lexVal->value.num_val.integer_val = num;
+    lexVal->sym = NUMBER;
+
+    return (struct astnode_hdr*)lexVal;
+}
+
+/*struct astnode_hdr* allocPostIncDec(struct LexVal *op, struct astnode_hdr *opand, int opType){
     struct LexVal *lexVal = mallocSafe(sizeof(struct LexVal));
     lexVal->type = NODE_LEX;
     lexVal->file = op->file;
@@ -77,7 +97,7 @@ struct astnode_hdr* allocPostIncDec(struct LexVal *op, struct astnode_hdr *opand
     lexVal->sym = NUMBER;
 
     return (struct astnode_hdr *) allocBinop(opand, allocBinop(opand, (struct astnode_hdr *) lexVal, opType), '=');
-}
+}*/
 
 struct astnode_hdr* allocSizeof(){
     if(currDecl.generic->child->type == NODE_FNCNDEC){
@@ -95,8 +115,8 @@ struct astnode_hdr* allocSizeof(){
     lexVal->file = currDecl.generic->file;
     lexVal->line = currDecl.generic->line;
     // TODO: target specific type of size_t
-    lexVal->tflags = ullint_type;
-    lexVal->value.num_val.integer_val = computeSizeof((struct astnode_hdr*)currDecl.generic);
+    lexVal->tflags = int_type; // to allow greater variety of expressions, may really be other type
+    lexVal->value.num_val.integer_val = computeSizeof((struct astnode_hdr*)currDecl.generic, false);
     lexVal->sym = NUMBER;
 
     clearEntry(currDecl);
@@ -179,7 +199,10 @@ struct astnode_hdr* allocFunc(struct astnode_hdr *name, struct astnode_lst *lst)
     return (struct astnode_hdr *) fncn;
 }
 
-size_t computeSizeof(struct astnode_hdr* el){
+size_t computeSizeof(struct astnode_hdr* el, bool expr){
+    if (expr)
+        goto inter;
+
     union astnode elUnion = (union astnode)el;
 
     switch (el->type) {
@@ -189,12 +212,29 @@ size_t computeSizeof(struct astnode_hdr* el){
                 case ENTRY_VAR:
                 case ENTRY_SMEM:
                 case ENTRY_UMEM:
+                inter:
                     ;
                     long multiplier = 1;
-                    struct astnode_spec_inter *node = elUnion.symEntry->child;
+                    struct astnode_spec_inter *node;
+                    if (expr)
+                        node = (struct astnode_spec_inter*)el;
+                    else
+                        node = elUnion.symEntry->child;
+
+                    if (node->type == NODE_FNCNDEC){
+                        fprintf(stderr, "%s:%d: Error: invalid application of 'sizeof' to function\n", currFile, currLine);
+                        exit(EXIT_FAILURE);
+                    }
+
                     while(node != NULL && node->type == NODE_ARY){
-                        if(!((struct astnode_ary*)node)->complete)
-                            return 0;
+                        if(!((struct astnode_ary*)node)->complete){
+                            if (expr){
+                                fprintf(stderr, "%s:%d: Error: invalid application of 'sizeof' to incomplete type\n", currFile, currLine);
+                                exit(EXIT_FAILURE);
+                            }
+                            else
+                                return 0;
+                        }
 
                         multiplier *= ((struct astnode_ary*)node)->length;
                         node = node->child;
@@ -215,6 +255,11 @@ size_t computeSizeof(struct astnode_hdr* el){
                         return 0;
                     }
                     struct astnode_typespec *specNode = (struct astnode_typespec *)node;
+                    if(hasFlag(specNode->stype,void_type)) {
+                        fprintf(stderr, "%s:%d: Error: invalid application of 'sizeof' to incomplete type\n", currFile,
+                                currLine);
+                        exit(EXIT_FAILURE);
+                    }
                     if(hasFlag(specNode->stype,char_type))
                         return multiplier*sizeof(char);
                     else if(hasFlag(specNode->stype,sint_type))
@@ -287,9 +332,9 @@ size_t getStructSize(struct astnode_tag *structNode, bool ignoreIncomplete){
     union symtab_entry currEntry = structSymtab->head;
     while(currEntry.generic != NULL){
         if(structNode->st_type == ENTRY_STAG)
-            totalSize += computeSizeof((struct astnode_hdr*)currEntry.generic);
+            totalSize += computeSizeof((struct astnode_hdr*)currEntry.generic, false);
         else {
-            size_t entrySize = computeSizeof((struct astnode_hdr*)currEntry.generic);
+            size_t entrySize = computeSizeof((struct astnode_hdr*)currEntry.generic, false);
             if(entrySize > totalSize)
                 totalSize = entrySize;
         }
@@ -460,7 +505,7 @@ struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_ent
 
     if(entry.generic->linkage == LINK_EXT || entry.generic->linkage == LINK_INT){
         union symtab_entry existingTemp = symtabLookup(symtab, entry.generic->ns, entry.generic->ident->value.string_val, false, entry.generic->linkage);
-        if(existingTemp.generic != NULL && !checkCompatibility((struct astnode_spec_inter*)existingTemp.generic, (struct astnode_spec_inter*)entry.generic, symtab, true)){
+        if(existingTemp.generic != NULL && !checkCompatibility((struct astnode_spec_inter*)existingTemp.generic, (struct astnode_spec_inter*)entry.generic, true, true)){
             fprintf(stderr, "%s:%d: Error: conflicting types for '%s'\n", entry.generic->file, entry.generic->line, entry.generic->ident->value.string_val);
             exit(EXIT_FAILURE);
         }
@@ -698,7 +743,7 @@ int checkStructValidity(){
     return 0;
 }
 
-bool checkCompatibility(struct astnode_spec_inter *entry1, struct astnode_spec_inter *entry2, struct symtab *symtab, bool qual){
+bool checkCompatibility(struct astnode_spec_inter *entry1, struct astnode_spec_inter *entry2, bool qual, bool comp){
     if(entry1->type != entry2->type)
         return false;
 
@@ -708,29 +753,37 @@ bool checkCompatibility(struct astnode_spec_inter *entry1, struct astnode_spec_i
                 return false;
 
             if(((struct symtab_entry_generic*)entry1)->st_type == ENTRY_VAR)
-                return checkCompatibility(entry1->child, entry2->child, symtab, qual);
+                return checkCompatibility(entry1->child, entry2->child, qual, comp);
             else if(((struct symtab_entry_generic*)entry1)->st_type == ENTRY_FNCN)
-                return checkCompatibilityFncn((struct astnode_fncndec*)entry1, (struct astnode_fncndec*)entry2, symtab);
+                return checkCompatibilityFncn((struct astnode_fncndec*)entry1, (struct astnode_fncndec*)entry2, comp);
         case NODE_PTR:
             if(((struct astnode_ptr*)entry1)->qtype != ((struct astnode_ptr*)entry2)->qtype && qual)
                 return false;
 
-            return checkCompatibility(entry1->child, entry2->child, symtab, true);
+            return checkCompatibility(entry1->child, entry2->child, true, comp);
         case NODE_ARY:
             if(((struct astnode_ary*)entry1)->complete && ((struct astnode_ary*)entry2)->complete && ((struct astnode_ary*)entry1)->length != ((struct astnode_ary*)entry2)->length)
                 return false;
             else if(((struct astnode_ary*)entry2)->complete && !((struct astnode_ary*)entry1)->complete){
-                ((struct astnode_ary*)entry1)->complete = true;
-                ((struct astnode_ary*)entry1)->length = ((struct astnode_ary*)entry2)->length;
+                if (comp) {
+                    ((struct astnode_ary *) entry1)->complete = true;
+                    ((struct astnode_ary *) entry1)->length = ((struct astnode_ary *) entry2)->length;
+                }
+                else
+                    return false;
             }
             else if(((struct astnode_ary*)entry1)->complete && !((struct astnode_ary*)entry2)->complete){
-                ((struct astnode_ary*)entry2)->complete = true;
-                ((struct astnode_ary*)entry2)->length = ((struct astnode_ary*)entry1)->length;
+                if (comp) {
+                    ((struct astnode_ary *) entry2)->complete = true;
+                    ((struct astnode_ary *) entry2)->length = ((struct astnode_ary *) entry1)->length;
+                }
+                else
+                    return false;
             }
 
-            return checkCompatibility(entry1->child, entry2->child, symtab, true);
+            return checkCompatibility(entry1->child, entry2->child, true, comp);
         case NODE_FNCNDEC:
-            return checkCompatibilityFncn((struct astnode_fncndec*)entry1, (struct astnode_fncndec*)entry2, symtab);
+            return checkCompatibilityFncn((struct astnode_fncndec*)entry1, (struct astnode_fncndec*)entry2, comp);
         case NODE_TYPESPEC: ;
             struct astnode_typespec *spec_node1 = (struct astnode_typespec*)entry1, *spec_node2 = (struct astnode_typespec*)entry2;
             if(spec_node1->stype == void_type && spec_node2->stype != void_type)
@@ -781,8 +834,8 @@ bool checkCompatibility(struct astnode_spec_inter *entry1, struct astnode_spec_i
                 if(tagNode1->ident == NULL || strcmp(tagNode1->ident->value.string_val, tagNode2->ident->value.string_val))
                     return false;
                 
-                struct astnode_tag *structDef1 = symtabLookup(symtab, TAG, tagNode1->ident->value.string_val, false, -1).tag;
-                struct astnode_tag *structDef2 = symtabLookup(symtab, TAG, tagNode2->ident->value.string_val, false, -1).tag;
+                struct astnode_tag *structDef1 = symtabLookup(currTab, TAG, tagNode1->ident->value.string_val, false, -1).tag;
+                struct astnode_tag *structDef2 = symtabLookup(currTab, TAG, tagNode2->ident->value.string_val, false, -1).tag;
 
                 if(structDef1 != structDef2)
                     return false;
@@ -795,7 +848,7 @@ bool checkCompatibility(struct astnode_spec_inter *entry1, struct astnode_spec_i
     }
 }
 
-bool checkCompatibilityFncn(struct astnode_fncndec *entry1, struct astnode_fncndec *entry2, struct symtab *symtab){
+bool checkCompatibilityFncn(struct astnode_fncndec *entry1, struct astnode_fncndec *entry2, bool comp){
     if(entry1->defined && entry1->unknown && !entry2->unknown && !entry2->none){
         fprintf(stderr, "%s:%d: Error: number of arguments does not match prototype\n", entry2->file, entry2->line);
         exit(EXIT_FAILURE);
@@ -807,23 +860,31 @@ bool checkCompatibilityFncn(struct astnode_fncndec *entry1, struct astnode_fncnd
             return false;
         else{
             for(int i = 0; i < entry1->args->numVals; i++){
-                if(!checkCompatibility((struct astnode_spec_inter*)entry2->args->els[i], (struct astnode_spec_inter*)entry1->args->els[i], symtab, false))
+                if(!checkCompatibility((struct astnode_spec_inter*)entry2->args->els[i], (struct astnode_spec_inter*)entry1->args->els[i], false, comp))
                     return false;
 
                 // keep resaving the param names if func not defined yet, decl w/o def param names don't matter
-                if(!entry1->defined)
-                    entry1->args->els[i] = entry2->args->els[i];
+                if(!entry1->defined) {
+                    if (comp)
+                        entry1->args->els[i] = entry2->args->els[i];
+                    else
+                        return false;
+                }
             }
 
             // keep resaving the scope if func not defined yet, decl w/o def scope only has params
             if(!entry1->defined){
-                entry1->scope = entry2->scope;
-                entry1->noIdent = entry2->noIdent;
+                if (comp) {
+                    entry1->scope = entry2->scope;
+                    entry1->noIdent = entry2->noIdent;
+                }
+                else
+                    return false;
             }
         }
     }
 
-    return checkCompatibility(entry1->child, entry2->child, symtab, true);
+    return checkCompatibility(entry1->child, entry2->child, true, comp);
 }
 
 struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union symtab_entry baseEntry, struct LexVal *ident, struct LexVal *scopeStart, bool complete){
@@ -1613,7 +1674,8 @@ void printAst(struct astnode_hdr *hdr, int lvl, bool isFunc){
         case NODE_FNCN:
             printf("FNCALL, %d arguments\n", node->fncn->lst->numVals);
             printAst(node->fncn->name, lvl + 1, false);
-            printAst((struct astnode_hdr *) node->fncn->lst, lvl, true);
+            if (node->fncn->lst->numVals > 0)
+                printAst((struct astnode_hdr *) node->fncn->lst, lvl, true);
             break;
         case NODE_CTRL: {
             switch (node->ctrl->ctrlType) {

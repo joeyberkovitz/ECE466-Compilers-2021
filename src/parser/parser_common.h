@@ -89,7 +89,7 @@ struct astnode_hdr*  allocUnop(struct astnode_hdr *opand, int opType);
 struct astnode_hdr*  allocBinop(struct astnode_hdr *left, struct astnode_hdr *right, int opType);
 struct astnode_hdr*  allocTerop(struct astnode_hdr *first, struct astnode_hdr *second, struct astnode_hdr *third);
 
-struct astnode_hdr*  allocPostIncDec(struct LexVal *op, struct astnode_hdr *opand, int opType);
+struct astnode_hdr* allocConst(struct LexVal *op, int num);
 struct astnode_hdr*  allocSizeof();
 struct astnode_cast*  allocCast();
 struct astnode_hdr*  allocAssignment(struct astnode_hdr *left, struct astnode_hdr *right, struct LexVal *opType);
@@ -98,7 +98,7 @@ struct astnode_lst* allocList(struct astnode_hdr *el);
 void addToList(struct astnode_lst *lst, struct astnode_hdr *el);
 
 struct astnode_hdr* allocFunc(struct astnode_hdr *name, struct astnode_lst *lst);
-size_t computeSizeof(struct astnode_hdr* el);
+size_t computeSizeof(struct astnode_hdr* el, bool expr);
 size_t getStructSize(struct astnode_tag *structNode, bool ignoreIncomplete);
 
 enum tab_type {
@@ -326,8 +326,8 @@ struct astnode_hdr* symCopyAndEnter(bool enter);
 struct astnode_hdr* genStruct(struct LexVal *type, struct symtab *symtab, union symtab_entry baseEntry, struct LexVal *ident, struct LexVal *scopeStart, bool complete);
 void checkVoid();
 int checkStructValidity();
-bool checkCompatibility(struct astnode_spec_inter *entry1, struct astnode_spec_inter *entry2, struct symtab *symtab, bool qual);
-bool checkCompatibilityFncn(struct astnode_fncndec *entry1, struct astnode_fncndec *entry2, struct symtab *symtab);
+bool checkCompatibility(struct astnode_spec_inter *entry1, struct astnode_spec_inter *entry2, bool qual, bool comp);
+bool checkCompatibilityFncn(struct astnode_fncndec *entry1, struct astnode_fncndec *entry2, bool comp);
 struct astnode_hdr* exprAssocVar(struct astnode_hdr *opand, enum symtab_ns ns, struct symtab *tab);
 
 struct symtab_entry_generic* allocEntry(enum symtab_type type, bool clear);

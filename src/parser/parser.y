@@ -349,8 +349,8 @@ cast-expression:
     /* 6.5.3 - Unary expressions */
 unary-expression:
         postfix-expression             {$$ = $1;}
-    |   PLUSPLUS unary-expression      {$$ = allocPostIncDec($1, $2, '+');}
-    |   MINUSMINUS unary-expression    {$$ = allocPostIncDec($1, $2, '-');}
+    |   PLUSPLUS unary-expression      {$$ = allocBinop($2, allocBinop($2, allocConst($1, 1), '+'), '=');}
+    |   MINUSMINUS unary-expression    {$$ = allocBinop($2, allocBinop($2, allocConst($1, 1), '-'), '=');}
     |   unary-operator cast-expression {$$ = allocUnop($2, $1->sym);}
     /* TODO: compute sizeof for expression at quad stage */
     |   SIZEOF unary-expression        {$$ = allocUnop($2, SIZEOF);}
