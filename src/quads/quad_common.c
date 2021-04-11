@@ -152,22 +152,20 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                     break;
                 case '*':
                     newQuad->lval = (struct astnode_quad_node*)genRegister(newQuad->rval1->dataType->child);
-                    if ((newQuad->lval->dataType->type == NODE_ARY || newQuad->lval->dataType->type == NODE_FNCNDEC) && !dontLEA){
-                        struct astnode_quad *leaQuad = mallocSafe(sizeof(struct astnode_quad));
-                        leaQuad->rval1 = newQuad->lval;
-                        leaQuad->lval = (struct astnode_quad_node*)genRegister(newQuad->lval->dataType);
-                        leaQuad = setLEAQuad(leaQuad, newQuad->lval->dataType->type == NODE_ARY);
-                        lastQuad->next = newQuad;
-                        newQuad->prev = lastQuad;
-                        lastQuad = newQuad;
-                        newQuad = leaQuad;
-                    }
+                    newQuad = allocLEAQuad(newQuad, &lastQuad, dontLEA);
                     break;
             }
 
             break;
         case NODE_BINOP: {
             switch (stmtUnion.binNode->op) {
+                case SHL:
+                case SHR:
+                case '&':
+                case '|':
+                case '^':
+                    fprintf(stderr, "Error: bitwise operators are not implemented\n");
+                    exit(EXIT_FAILURE);
                 case '=':
                     lastQuad = stmtToQuad(stmtUnion.binNode->right, lastQuad, firstQuad, false, dontEmit);
                     newQuad->rval1 = lastQuad->lval;
@@ -176,61 +174,107 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                         fprintf(stderr, "Error: modifiable lvalue required as left operand of assignment\n");
                         exit(EXIT_FAILURE);
                     }
-                    // TODO: verify only unop lval is *
+
                     if (stmtUnion.binNode->left->type == NODE_UNOP) {
-                        newQuad->opcode = QOP_STORE;
-                        newQuad->rval2 = lnode;
+                        struct astnode_quad *storeQuad = newQuad;
+                        storeQuad->opcode = QOP_STORE;
+                        storeQuad->rval2 = lnode;
+                        typeCheck(storeQuad, '=', false);
+                        if (!dontEmit) {
+                            lastQuad->next = storeQuad;
+                            storeQuad->prev = lastQuad;
+                            lastQuad = storeQuad;
+                        }
+                        newQuad = mallocSafe(sizeof(struct astnode_quad));
+                        newQuad->opcode = QOP_LOAD;
+                        newQuad->rval1 = lnode;
+                        newQuad->lval = (struct astnode_quad_node*) genRegister(lnode->dataType->child);
+                        newQuad = allocLEAQuad(newQuad, &lastQuad, dontLEA);
                     }
                     else {
                         newQuad->opcode = QOP_MOVE;
                         newQuad->lval = lnode;
+                        typeCheck(newQuad, '=', false);
                     }
+
+                    if (newQuad->lval->dataType->type == NODE_PTR)
+                        ((struct astnode_ptr*)newQuad->lval->dataType)->qtype = 0;
+                    if (newQuad->lval->dataType->type == NODE_TYPESPEC)
+                        ((struct astnode_typespec*)newQuad->lval->dataType)->qtype = 0;
+
                     break;
-                case '.': //TODO: do we want to support this?
+                case '.':
                     fprintf(stderr, "Error: struct member access unimplemented\n");
                     exit(EXIT_FAILURE);
-                    break;
-                case ',': //Probably best to break each comma into its own quad
+                case ',':
+                    lastQuad = stmtToQuad(stmtUnion.binNode->left, lastQuad, firstQuad, false, dontEmit);
+                    lastQuad->lval->dataType = allocTypespec(void_type);
+                    lastQuad = stmtToQuad(stmtUnion.binNode->right, lastQuad, firstQuad, false, dontEmit);
+                    return lastQuad;
                 default:
                     newQuad->opcode = binopToQop(stmtUnion.binNode->op);
                     unsigned long long size = 0;
-                    bool addPtr1 = false;
+                    bool ptr1 = false, ptrDiff = false;
                     lastQuad = stmtToQuad(stmtUnion.binNode->left, lastQuad, firstQuad, false, dontEmit);
                     newQuad->rval1 = lastQuad->lval;
-                    if (stmtUnion.binNode->op == '+' && lastQuad->lval->dataType->type == NODE_PTR){
+                    if ((stmtUnion.binNode->op == '+' || stmtUnion.binNode->op == '-') && lastQuad->lval->dataType->type == NODE_PTR){
                         size = (unsigned long long)computeSizeof((struct astnode_hdr *) lastQuad->lval->dataType->child, true);
-                        addPtr1 = true;
+                        ptr1 = true;
                     }
 
                     lastQuad = stmtToQuad(stmtUnion.binNode->right, lastQuad, firstQuad, false, dontEmit);
                     newQuad->rval2 = lastQuad->lval;
-                    if (stmtUnion.binNode->op == '+' && (lastQuad->lval->dataType->type == NODE_PTR || addPtr1)) {
-                        if (!addPtr1)
+                    if ((stmtUnion.binNode->op == '+' || stmtUnion.binNode->op == '-') && (lastQuad->lval->dataType->type == NODE_PTR || ptr1)) {
+                        if (!ptr1)
                             size = (unsigned long long) computeSizeof(
                                     (struct astnode_hdr *) lastQuad->lval->dataType->child, true);
+                        else if(stmtUnion.binNode->op == '-' && lastQuad->lval->dataType->type == NODE_PTR)
+                            ptrDiff = true;
 
                         struct astnode_quad_node *sizeNode = allocQuadConst(int_type, (LexVals) (NUMTYPE) size, false);
-                        struct astnode_quad *mulQuad = mallocSafe(sizeof(struct astnode_quad));
-                        mulQuad->opcode = QOP_MUL;
-                        mulQuad->rval1 = addPtr1 ? sizeNode : newQuad->rval1;
-                        mulQuad->rval2 = addPtr1 ? newQuad->rval2 : sizeNode;
-                        mulQuad->lval = (struct astnode_quad_node *) genRegister(mulQuad->rval2->dataType);
-                        if (!dontEmit) {
-                            lastQuad->next = mulQuad;
-                            mulQuad->prev = lastQuad;
-                            lastQuad = mulQuad;
+                        struct astnode_quad *mulDivQuad = mallocSafe(sizeof(struct astnode_quad));
+                        if (ptrDiff){
+                            newQuad->lval = (struct astnode_quad_node*)genRegister(newQuad->rval1->dataType);
+                            mulDivQuad->opcode = QOP_DIV;
+                            mulDivQuad->rval1 = newQuad->lval;
+                            mulDivQuad->rval2 = sizeNode;
+                            // int_type to allow greater variety of expressions, may really be other type
+                            mulDivQuad->lval = (struct astnode_quad_node *) genRegister(mulDivQuad->rval2->dataType);
+                            typeCheck(newQuad, stmtUnion.binNode->op, false);
+                            if (!dontEmit) {
+                                lastQuad->next = newQuad;
+                                newQuad->prev = lastQuad;
+                                lastQuad = newQuad;
+                            }
+                            newQuad = mulDivQuad;
                         }
+                        else {
+                            mulDivQuad->opcode = QOP_MUL;
+                            mulDivQuad->rval1 = ptr1 ? sizeNode : newQuad->rval1;
+                            mulDivQuad->rval2 = ptr1 ? newQuad->rval2 : sizeNode;
+                            mulDivQuad->lval = (struct astnode_quad_node *) genRegister(mulDivQuad->rval2->dataType);
+                            if (!dontEmit) {
+                                lastQuad->next = mulDivQuad;
+                                mulDivQuad->prev = lastQuad;
+                                lastQuad = mulDivQuad;
+                            }
 
-                        newQuad->rval1 = addPtr1 ? newQuad->rval1 : mulQuad->lval;
-                        newQuad->rval2 = addPtr1 ? mulQuad->lval : newQuad->rval2;
+                            newQuad->rval1 = ptr1 ? newQuad->rval1 : mulDivQuad->lval;
+                            newQuad->rval2 = ptr1 ? mulDivQuad->lval : newQuad->rval2;
+                        }
                     }
 
-                    //TODO: type checking
-                    typeCheck(newQuad, stmtUnion.binNode->op, false);
-                    newQuad->lval = (struct astnode_quad_node*)genRegister(addPtr1 ? newQuad->rval1->dataType : newQuad->rval2->dataType);
+                    if (!ptrDiff) {
+                        typeCheck(newQuad, stmtUnion.binNode->op, false);
+                        newQuad->lval = (struct astnode_quad_node *) genRegister(
+                                ptr1 ? newQuad->rval1->dataType : newQuad->rval2->dataType);
+                    }
             }
             break;
         }
+        case NODE_TEROP:
+            fprintf(stderr, "Error: conditional operators are not implemented\n");
+            exit(EXIT_FAILURE);
         case NODE_CAST:
             fprintf(stderr, "Error: casts are not implemented\n");
             exit(EXIT_FAILURE);
@@ -300,7 +344,7 @@ struct astnode_quad* argToQuad(struct astnode_hdr *arg, struct astnode_hdr *para
     newQuad->rval2 = lastQuad->lval;
 
     if (!varArg) {
-        if (!assignConvCheck(newQuad->rval2, param)){
+        if (!argConvCheck(newQuad->rval2, param)){
             fprintf(stderr, "Error: incompatible type for argument %d of '%s' (note: implicit conversions are not implemented)\n",
                     numArg, fname);
             exit(EXIT_FAILURE);
@@ -449,8 +493,24 @@ bool isInteger(struct astnode_spec_inter *node){
     return false;
 }
 
+bool isFloat(struct astnode_spec_inter *node){
+    if (node->type == NODE_TYPESPEC){
+        enum type_flag type = ((struct astnode_typespec*)node)->stype;
+        return hasFlag(type,float_type) || hasFlag(type,double_type);
+    }
+
+    return false;
+}
+
 bool isPtr(struct astnode_spec_inter *node){
     return node->type == NODE_PTR;
+}
+
+// Incomplete checks: incomplete array, void type and incomplete struct/union type
+bool isIncomplete(struct astnode_spec_inter *node){
+    return (node->type == NODE_ARY && !((struct astnode_ary*)node)->complete) ||
+            (node->type == NODE_TYPESPEC && (((struct astnode_typespec*)node)->stype == void_type) ||
+            (((struct astnode_typespec*)node)->stype == struct_type && !((struct astnode_tag*)((struct astnode_typespec*)node)->type_specs->els[0])->complete));
 }
 
 void typeCheck(struct astnode_quad *quad, int op, bool unop){
@@ -462,19 +522,32 @@ void typeCheck(struct astnode_quad *quad, int op, bool unop){
                 exit(EXIT_FAILURE);
             }
             break;
+        case QOP_STORE:
+            assignConvCheck(quad->rval2->dataType->child, quad->rval1->dataType);
+            break;
+        case QOP_SUB:
+            if (isPtr(quad->rval1->dataType) && isPtr(quad->rval2->dataType)){
+                if (!checkCompatibility(quad->rval1->dataType->child, quad->rval2->dataType->child, false, false) ||
+                        isIncomplete(quad->rval1->dataType->child))
+                    binErr = true;
+
+                break;
+            }
         case QOP_ADD:
             if (unop && !isInteger(quad->rval2->dataType))
                 unErr = true;
 
             binaryConvCheck(quad->rval1, quad->rval2);
             if ((!isInteger(quad->rval1->dataType) || !isInteger(quad->rval2->dataType)) &&
-                (!isPtr(quad->rval1->dataType) || !isInteger(quad->rval2->dataType)) &&
-                (!isInteger(quad->rval1->dataType) || !isPtr(quad->rval2->dataType)))
+                    (!isPtr(quad->rval1->dataType) || !isInteger(quad->rval2->dataType)) &&
+                    (!isInteger(quad->rval1->dataType) || !isPtr(quad->rval2->dataType)))
                 binErr = true;
-            break;
-        case QOP_SUB:
-            if (unop && !isInteger(quad->rval2->dataType))
-                unErr = true;
+            else if(isPtr(quad->rval1->dataType) || isPtr(quad->rval2->dataType)) {
+                struct astnode_spec_inter *check = isPtr(quad->rval1->dataType) ? quad->rval1->dataType
+                                                                                : quad->rval2->dataType;
+                if (check->child->type == NODE_FNCNDEC || isIncomplete(check->child))
+                    binErr = true;
+            }
             break;
         case QOP_MUL:
         case QOP_DIV:
@@ -483,29 +556,49 @@ void typeCheck(struct astnode_quad *quad, int op, bool unop){
             if (!isInteger(quad->rval1->dataType) || !isInteger(quad->rval2->dataType))
                 binErr = true;
             break;
+        case QOP_MOVE:
+            if (op == '=')
+                assignConvCheck(quad->lval->dataType, quad->rval1->dataType);
+            break;
     }
 
     if (unErr){
-        fprintf(stderr, "Error: wrong type argument to unary %s (note: float types are not implemented)\n", op == '+' ? "plus" : "minus");
+        fprintf(stderr, "Error: wrong type argument to unary %s\n", op == '+' ? "plus" : "minus");
         exit(EXIT_FAILURE);
     }
     if (binErr){
-        fprintf(stderr, "Error: invalid operands to binary %c (note: float types are not implemented)\n", op);
+        fprintf(stderr, "Error: invalid operands to binary %c\n", op);
         exit(EXIT_FAILURE);
     }
 }
 
-bool assignConvCheck(struct astnode_quad_node *arg, struct astnode_hdr *param){
-    // TODO: check for assignments
+void checkFloat(struct astnode_spec_inter *node){
+    if (isFloat(node)){
+        fprintf(stderr, "Error: float types are not implemented\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void assignConvCheck(struct astnode_spec_inter *left, struct astnode_spec_inter *right){
+    checkFloat(left);
+    if (!checkCompatibility(left, right, true, false)){
+        fprintf(stderr, "Error: assignment conversions specify implicit cast and casting is not implemented\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+bool argConvCheck(struct astnode_quad_node *arg, struct astnode_hdr *param){
     if (param->type != NODE_SYMTAB){
         fprintf(stderr, "Error: parameter which is not an entry\n");
         exit(EXIT_FAILURE);
     }
 
+    checkFloat(arg->dataType);
     return checkCompatibility(((struct symtab_entry_generic*)param)->child, arg->dataType, true, false);
 }
 
 void unaryConvCheck(struct astnode_quad_node *node){
+    checkFloat(node->dataType);
     if (node->dataType->type == NODE_TYPESPEC){
         enum type_flag type = ((struct astnode_typespec*)node->dataType)->stype;
         if (hasFlag(type,sint_type) || hasFlag(type,char_type)){
@@ -522,6 +615,21 @@ void binaryConvCheck(struct astnode_quad_node *left, struct astnode_quad_node *r
         fprintf(stderr, "Error: binary conversions specify an implicit cast and casting is not implemented\n");
         exit(EXIT_FAILURE);
     }
+}
+
+struct astnode_quad* allocLEAQuad(struct astnode_quad *quad, struct astnode_quad **lastQuad, bool dontLEA){
+    if ((quad->lval->dataType->type == NODE_ARY || quad->lval->dataType->type == NODE_FNCNDEC) && !dontLEA) {
+        struct astnode_quad *leaQuad = mallocSafe(sizeof(struct astnode_quad));
+        leaQuad->rval1 = quad->lval;
+        leaQuad->lval = (struct astnode_quad_node *) genRegister(quad->lval->dataType);
+        leaQuad = setLEAQuad(leaQuad, quad->lval->dataType->type == NODE_ARY);
+        (*lastQuad)->next = quad;
+        quad->prev = *lastQuad;
+        *lastQuad = quad;
+        return leaQuad;
+    }
+    else
+        return quad;
 }
 
 struct astnode_quad* setLEAQuad(struct astnode_quad *quad, bool ary){

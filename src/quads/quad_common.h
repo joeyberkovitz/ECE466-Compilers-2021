@@ -93,12 +93,17 @@ struct astnode_quad_register *genRegister(struct astnode_spec_inter *type);
 struct astnode_quad_node *genLval(struct astnode_hdr *node, struct astnode_quad **lastQuad, struct astnode_quad **firstQuad, bool dontEmit, bool mod, bool funcDes);
 
 bool isInteger(struct astnode_spec_inter *node);
+bool isFloat(struct astnode_spec_inter *node);
 bool isPtr(struct astnode_spec_inter *node);
+bool isIncomplete(struct astnode_spec_inter *node);
 void typeCheck(struct astnode_quad *quad, int op, bool unop);
-bool assignConvCheck(struct astnode_quad_node *arg, struct astnode_hdr *param);
+void checkFloat(struct astnode_spec_inter *node);
+void assignConvCheck(struct astnode_spec_inter *left, struct astnode_spec_inter *right);
+bool argConvCheck(struct astnode_quad_node *arg, struct astnode_hdr *param);
 void unaryConvCheck(struct astnode_quad_node *node);
 void binaryConvCheck(struct astnode_quad_node *left, struct astnode_quad_node *right);
 
+struct astnode_quad* allocLEAQuad(struct astnode_quad *quad, struct astnode_quad **lastQuad, bool dontLEA);
 struct astnode_quad* setLEAQuad(struct astnode_quad *quad, bool ary);
 struct astnode_quad_node* allocQuadConst(enum type_flag type, LexVals value, bool string);
 struct astnode_hdr* allocFncndecCopy(struct astnode_fncndec *fncn);
