@@ -11,18 +11,13 @@ enum quad_opcode {
     QOP_DIV,
     QOP_MUL,
     QOP_MOD,
-    QOP_LOGEQ,
-    QOP_LOGNEQ,
-    QOP_LT,
-    QOP_GT,
-    QOP_LTEQ,
-    QOP_GTEQ,
     QOP_MOVE,
     QOP_LEA,
     QOP_ARG,
     QOP_CALL,
     QOP_NOP,
     QOP_CMP,
+    QOP_RETURN,
 
     QOP_BR_EQ,
     QOP_BR_NEQ,
@@ -98,11 +93,11 @@ struct basic_block {
 
     int funcIdx, blockIdx; //Index of function, index of block in function
 
-    struct basic_block *next,*prev;
+    struct basic_block *next,*prev, *brPt, *ctPt;
 };
 
 //Create a new basic block struct
-struct basic_block* genBasicBlock(struct basic_block *prevBlock, int funcIdx);
+struct basic_block* genBasicBlock(struct basic_block *prevBlock, int funcIdx, struct basic_block *existingPtr);
 //Given a list of statement AST nodes, convert to quads, returning first basic block in linked list
 struct basic_block* genQuads(struct astnode_lst *stmtList, struct basic_block *prevBlock, int funcIdx, char *fname);
 
@@ -136,6 +131,7 @@ struct astnode_quad_node* allocQuadConst(enum type_flag type, LexVals value, boo
 struct astnode_hdr* allocFncndecCopy(struct astnode_fncndec *fncn);
 struct astnode_spec_inter* allocTypespec(enum type_flag type);
 
+struct astnode_quad_bb* allocBBQuadNode(struct basic_block *bb);
 struct astnode_quad* allocCmpQuad(struct astnode_quad_node *left, struct astnode_quad_node *right, struct astnode_quad *lastQuad);
 struct astnode_quad* allocMoveQuad(struct astnode_quad_node *lval, struct astnode_quad_node *rval, struct astnode_quad *lastQuad);
 struct astnode_quad* allocQuadBR(enum quad_opcode branchType, struct basic_block *trueBB, struct basic_block *falseBB, struct astnode_quad *lastQuad);

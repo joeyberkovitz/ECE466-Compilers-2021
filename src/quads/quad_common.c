@@ -5,28 +5,41 @@
 
 #define LASTBB(lq, init) ((lq) == NULL ? (init) : (lq)->parentBlock)
 
-struct basic_block* genBasicBlock(struct basic_block *prevBlock, int funcIdx){
-    struct basic_block *newBlock = mallocSafe(sizeof(struct basic_block));
+struct basic_block* genBasicBlock(struct basic_block *prevBlock, int funcIdx, struct basic_block *existingPtr){
+    struct basic_block *newBlock = existingPtr ? existingPtr : mallocSafe(sizeof(struct basic_block));
     newBlock->type = NODE_BASICBLOCK;
     newBlock->funcIdx = funcIdx;
     newBlock->quads = NULL;
     if(prevBlock != NULL){
-        prevBlock->next = newBlock;
         newBlock->blockIdx = prevBlock->blockIdx + 1;
+        newBlock->brPt = prevBlock->brPt;
+        newBlock->ctPt = prevBlock->ctPt;
+        newBlock->prev = prevBlock;
+        if(prevBlock->next != NULL){
+            newBlock->next = prevBlock->next;
+            newBlock->next->prev = newBlock;
+
+            struct basic_block *currBlock = newBlock->next;
+            while (currBlock != NULL){
+                currBlock->blockIdx++;
+                currBlock = currBlock->next;
+            }
+
+        }
+        prevBlock->next = newBlock;
     }
     else{
+        newBlock->brPt = newBlock->ctPt = NULL;
         newBlock->blockIdx = 1;
+        newBlock->prev = NULL;
+        newBlock->next = NULL;
     }
-
-    newBlock->prev = prevBlock;
-    newBlock->next = NULL;
-
     return newBlock;
 }
 
 struct basic_block* genQuads(struct astnode_lst *stmtList, struct basic_block *prevBlock, int funcIdx, char *fname){
     struct astnode_quad *lastQuad = NULL;
-    struct basic_block *initBlock = genBasicBlock(prevBlock, funcIdx);
+    struct basic_block *initBlock = genBasicBlock(prevBlock, funcIdx, NULL);
     struct basic_block *currBlock = initBlock;
     struct astnode_quad **firstQuad = &currBlock->quads;
 
@@ -234,9 +247,9 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                     //If left stmt == true for LOGAND || left stmt == false for LOGOR, keep going
                         //Put result of right into logLval
                     //Else - put 0 into logLval
-                    struct basic_block *leftBB = genBasicBlock(lastQuad->parentBlock, lastQuad->parentBlock->funcIdx);
-                    struct basic_block *rightBB = genBasicBlock(leftBB, lastQuad->parentBlock->funcIdx);
-                    struct basic_block *newBB = genBasicBlock(rightBB, lastQuad->parentBlock->funcIdx);
+                    struct basic_block *leftBB = genBasicBlock(lastQuad->parentBlock, lastQuad->parentBlock->funcIdx, NULL);
+                    struct basic_block *rightBB = genBasicBlock(leftBB, lastQuad->parentBlock->funcIdx, NULL);
+                    struct basic_block *newBB = genBasicBlock(rightBB, lastQuad->parentBlock->funcIdx, NULL);
                     lastQuad = allocQuadBR(stmtUnion.binNode->op == LOGAND ? QOP_BR_EQ : QOP_BR_NEQ, leftBB, rightBB, lastQuad);
 
                     //Left side - if we got here, then return 1 for LOGOR, 0 for LOGAND
@@ -383,7 +396,7 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                     struct astnode_quad *lastTrueQuad, *lastFalseQuad;
                     struct basic_block *brPt = NULL, *ctPt = NULL;
                     if(stmtUnion.ctrl->ctrlType == CTRL_WHILE){
-                        ctPt = genBasicBlock(LASTBB(lastQuad, init_block), LASTBB(lastQuad, init_block)->funcIdx);
+                        ctPt = genBasicBlock(LASTBB(lastQuad, init_block), LASTBB(lastQuad, init_block)->funcIdx, NULL);
                         lastQuad = NULL;
                         init_block = ctPt;
                         firstQuad = &ctPt->quads;
@@ -395,19 +408,22 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                     lastQuad = allocCmpQuad(lastQuad->lval, allocQuadConst(int_type, (LexVals)(NUMTYPE)0ull, false), lastQuad);
 
 
-                    struct basic_block *trueBB = genBasicBlock(lastQuad->parentBlock, lastQuad->parentBlock->funcIdx);
+                    struct basic_block *newBB = mallocSafe(sizeof(struct basic_block));
+                    if(stmtUnion.ctrl->ctrlType == CTRL_WHILE) {
+                        ctPt->brPt = newBB;
+                    }
+                    struct basic_block *trueBB = genBasicBlock(lastQuad->parentBlock, lastQuad->parentBlock->funcIdx, NULL);
                     lastTrueQuad = stmtToQuad(stmtUnion.ctrl->stmt, NULL, &trueBB->quads, trueBB, dontLEA, dontEmit);
 
                     struct basic_block *falseBB = NULL;
-                    if (stmtUnion.ctrl->stmtSecondary != NULL) {
-                        falseBB = genBasicBlock(trueBB, lastQuad->parentBlock->funcIdx);
+                    if (stmtUnion.ctrl->stmtSecondary != NULL)
+                        falseBB = genBasicBlock(trueBB, lastQuad->parentBlock->funcIdx, NULL);
+
+                    if (stmtUnion.ctrl->stmtSecondary != NULL)
                         lastFalseQuad = stmtToQuad(stmtUnion.ctrl->stmtSecondary, NULL, &falseBB->quads, falseBB,
                                                    dontLEA, dontEmit);
-                    }
 
-                    struct basic_block *newBB = genBasicBlock(falseBB ? falseBB : trueBB,
-                                                              lastQuad->parentBlock->funcIdx);
-                    brPt = newBB;
+                    genBasicBlock(lastQuad->parentBlock, lastQuad->parentBlock->funcIdx, newBB);
                     //TODO: properly handle break/continue points
                     //This should remain in the original BB
                     lastQuad = allocQuadBR(QOP_BR_NEQ, trueBB, falseBB ? falseBB : newBB, lastQuad);
@@ -433,8 +449,34 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
             }
             break;
         }
-        case NODE_JMP:
+        case NODE_JMP: {
+            switch (stmtUnion.jump->jumpType) {
+                case JUMP_BREAK:
+                    if(newQuad->parentBlock != NULL && newQuad->parentBlock->brPt != NULL){
+                        newQuad->opcode = QOP_BR_UNCOND;
+                        newQuad->rval1 = (struct astnode_quad_node *) allocBBQuadNode(newQuad->parentBlock->brPt);
+                    } else{
+                        fprintf(stderr, "Error: attempt to break without a break point specified\n");
+                        exit(EXIT_FAILURE);
+                    }
+                    break;
+                case JUMP_CONT:
+                    if(newQuad->parentBlock != NULL && newQuad->parentBlock->ctPt != NULL){
+                        newQuad->opcode = QOP_BR_UNCOND;
+                        newQuad->rval1 = (struct astnode_quad_node *) allocBBQuadNode(newQuad->parentBlock->ctPt);
+                    } else{
+                        fprintf(stderr, "Error: attempt to continue without a continue point specified\n");
+                        exit(EXIT_FAILURE);
+                    }
+                    break;
+                case JUMP_RET:
+                    newQuad->opcode = QOP_RETURN;
+                    lastQuad = stmtToQuad(stmtUnion.jump->val, lastQuad, firstQuad, LASTBB(lastQuad, init_block), dontLEA, dontEmit);
+                    newQuad->rval1 = lastQuad->lval;
+                    break;
+            }
             break;
+        }
     }
 
     //This should occur at end because of depth-first recursion
@@ -818,20 +860,21 @@ struct astnode_quad* allocCmpQuad(struct astnode_quad_node *left, struct astnode
     return allocQuad(QOP_CMP, left, right, lastQuad);
 }
 
+struct astnode_quad_bb* allocBBQuadNode(struct basic_block *bb){
+    struct astnode_quad_bb *bbNode = mallocSafe(sizeof(struct astnode_quad_bb));
+    bbNode->bb = bb;
+    bbNode->type = NODE_QUAD_VAL;
+    bbNode->quadType = QUADNODE_BASICBLOCK;
+    bbNode->dataType = NULL;
+    return bbNode;
+}
+
 struct astnode_quad* allocQuadBR(enum quad_opcode branchType, struct basic_block *trueBB, struct basic_block *falseBB, struct astnode_quad *lastQuad){
-    struct astnode_quad_bb *bbRval1 = mallocSafe(sizeof(struct astnode_quad_bb));
+    struct astnode_quad_bb *bbRval1 = allocBBQuadNode(trueBB);
     struct astnode_quad_bb *bbRval2 = NULL;
-    bbRval1->type = NODE_QUAD_VAL;
-    bbRval1->dataType = NULL;
-    bbRval1->quadType = QUADNODE_BASICBLOCK;
-    bbRval1->bb = trueBB;
 
     if(falseBB != NULL){
-        bbRval2 = mallocSafe(sizeof(struct astnode_quad_bb));
-        bbRval2->type = NODE_QUAD_VAL;
-        bbRval2->dataType = NULL;
-        bbRval2->quadType = QUADNODE_BASICBLOCK;
-        bbRval2->bb = falseBB;
+        bbRval2 = allocBBQuadNode(falseBB);
     }
 
     return allocQuad(branchType, (struct astnode_quad_node *) bbRval1, (struct astnode_quad_node *) bbRval2, lastQuad);
@@ -875,12 +918,6 @@ void printQuads(struct basic_block *basicBlock, char *fname){
                 case QOP_LEA: printf("LEA"); break;
                 case QOP_ARG: printf("ARG"); break;
                 case QOP_CALL: printf("CALL"); break;
-                case QOP_LOGEQ: printf("CMP_LOGEQ"); break;
-                case QOP_LOGNEQ: printf("CMP_LOGNEQ"); break;
-                case QOP_LT: printf("CMP_LT"); break;
-                case QOP_GT: printf("CMP_GT"); break;
-                case QOP_LTEQ: printf("CMP_LTEQ"); break;
-                case QOP_GTEQ: printf("CMP_GTEQ"); break;
                 case QOP_NOP: printf("NOOP"); break;
                 case QOP_CMP: printf("CMP"); break;
                 case QOP_BR_EQ: printf("BR_EQ"); break;
@@ -896,6 +933,7 @@ void printQuads(struct basic_block *basicBlock, char *fname){
                 case QOP_CC_LT: printf("CC_LT"); break;
                 case QOP_CC_GTEQ: printf("CC_GTEQ"); break;
                 case QOP_CC_LTEQ: printf("CC_LTEQ"); break;
+                case QOP_RETURN: printf("RETURN"); break;
             }
 
             printf(" ");
