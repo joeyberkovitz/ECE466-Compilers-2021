@@ -66,6 +66,15 @@ struct basic_block* genQuads(struct astnode_lst *stmtList, struct basic_block *p
 struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *lastQuad,
         struct astnode_quad **firstQuad, struct basic_block *init_block, bool dontLEA, bool dontEmit){
     union astnode stmtUnion = (union astnode)stmt;
+    if(stmt->type == NODE_LST){
+        //List doesn't generate a new quad other than its children
+        for(int i = 0; i < stmtUnion.lst->numVals; i++){
+            lastQuad = stmtToQuad(stmtUnion.lst->els[i], lastQuad, firstQuad, init_block, false, false);
+        }
+        return lastQuad;
+    }
+
+
     struct astnode_quad *newQuad = mallocSafe(sizeof(struct astnode_quad));
     newQuad->type = NODE_QUAD;
     newQuad->parentBlock = init_block;
@@ -235,7 +244,7 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                 case LOGOR: {
                     //TODO: type checking - ensure left/right are scalar after evaluation
                     //Process left stmt
-                    lastQuad = stmtToQuad(stmtUnion.binNode->left, lastQuad, firstQuad, LASTBB(lastQuad, init_block), dontLEA, dontEmit);
+                    lastQuad = stmtToQuad(stmtUnion.binNode->left, lastQuad, firstQuad, LASTBB(lastQuad, init_block), false, dontEmit);
                     lastQuad = allocCmpQuad(
                         lastQuad->lval,
                         allocQuadConst(int_type, (LexVals) (NUMTYPE) 0ull, false),
@@ -259,7 +268,7 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                     lastQuad = allocQuadBR(QOP_BR_UNCOND, newBB, NULL, lastQuad);
 
                     //Right side - evaluate stmt, CMP to 0, store in logLval, return to newBB
-                    lastQuad = stmtToQuad(stmtUnion.binNode->right, NULL, &rightBB->quads, rightBB, dontLEA, dontEmit);
+                    lastQuad = stmtToQuad(stmtUnion.binNode->right, NULL, &rightBB->quads, rightBB, false, dontEmit);
                     lastQuad = allocCmpQuad(lastQuad->lval, allocQuadConst(int_type, (LexVals) (NUMTYPE) 0ull, false), lastQuad);
                     lastQuad = allocCCQuad(logLval, QOP_CC_NEQ, lastQuad);
                     lastQuad = allocQuadBR(QOP_BR_UNCOND, newBB, NULL, lastQuad);
@@ -394,9 +403,19 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                 case CTRL_WHILE:
                 case CTRL_IF: {
                     struct astnode_quad *lastTrueQuad, *lastFalseQuad;
-                    struct basic_block *brPt = NULL, *ctPt = NULL;
+                    struct basic_block *brPt = NULL, *ctPt = NULL,
+                            *lastBrPt = LASTBB(lastQuad,init_block)->brPt,
+                            *lastCtPt = LASTBB(lastQuad,init_block)->ctPt;
+                    struct basic_block *newBB = mallocSafe(sizeof(struct basic_block));
                     if(stmtUnion.ctrl->ctrlType == CTRL_WHILE){
                         ctPt = genBasicBlock(LASTBB(lastQuad, init_block), LASTBB(lastQuad, init_block)->funcIdx, NULL);
+                        ctPt->brPt = newBB;
+                        ctPt->ctPt = ctPt;
+                        bool wasNull = lastQuad == NULL;
+                        //Insert branch in previous block to continue point in case they weren't in order
+                        lastQuad = allocQuadBR(QOP_BR_UNCOND, ctPt, NULL, lastQuad);
+                        if(wasNull)
+                            lastQuad->parentBlock = init_block;
                         lastQuad = NULL;
                         init_block = ctPt;
                         firstQuad = &ctPt->quads;
@@ -404,16 +423,12 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
 
                     //This will frequently start a new block due to hidden logic/short circuit ops
                     lastQuad = stmtToQuad(stmtUnion.ctrl->ctrlExpr, lastQuad, firstQuad, LASTBB(lastQuad, init_block),
-                                          dontLEA, dontEmit);
+                                          false, dontEmit);
                     lastQuad = allocCmpQuad(lastQuad->lval, allocQuadConst(int_type, (LexVals)(NUMTYPE)0ull, false), lastQuad);
 
 
-                    struct basic_block *newBB = mallocSafe(sizeof(struct basic_block));
-                    if(stmtUnion.ctrl->ctrlType == CTRL_WHILE) {
-                        ctPt->brPt = newBB;
-                    }
                     struct basic_block *trueBB = genBasicBlock(lastQuad->parentBlock, lastQuad->parentBlock->funcIdx, NULL);
-                    lastTrueQuad = stmtToQuad(stmtUnion.ctrl->stmt, NULL, &trueBB->quads, trueBB, dontLEA, dontEmit);
+                    lastTrueQuad = stmtToQuad(stmtUnion.ctrl->stmt, NULL, &trueBB->quads, trueBB, false, dontEmit);
 
                     struct basic_block *falseBB = NULL;
                     if (stmtUnion.ctrl->stmtSecondary != NULL)
@@ -421,9 +436,11 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
 
                     if (stmtUnion.ctrl->stmtSecondary != NULL)
                         lastFalseQuad = stmtToQuad(stmtUnion.ctrl->stmtSecondary, NULL, &falseBB->quads, falseBB,
-                                                   dontLEA, dontEmit);
+                                                   false, dontEmit);
 
-                    genBasicBlock(lastQuad->parentBlock, lastQuad->parentBlock->funcIdx, newBB);
+                    genBasicBlock(stmtUnion.ctrl->stmtSecondary ? falseBB : trueBB, lastQuad->parentBlock->funcIdx, newBB);
+                    newBB->brPt = lastBrPt;
+                    newBB->ctPt = lastCtPt;
                     //TODO: properly handle break/continue points
                     //This should remain in the original BB
                     lastQuad = allocQuadBR(QOP_BR_NEQ, trueBB, falseBB ? falseBB : newBB, lastQuad);
@@ -471,7 +488,7 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                     break;
                 case JUMP_RET:
                     newQuad->opcode = QOP_RETURN;
-                    lastQuad = stmtToQuad(stmtUnion.jump->val, lastQuad, firstQuad, LASTBB(lastQuad, init_block), dontLEA, dontEmit);
+                    lastQuad = stmtToQuad(stmtUnion.jump->val, lastQuad, firstQuad, LASTBB(lastQuad, init_block), false, dontEmit);
                     newQuad->rval1 = lastQuad->lval;
                     break;
             }
