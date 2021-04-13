@@ -20,8 +20,10 @@ lexer: $(OBJS) lextest.c
 	$(CC) lextest.c $(CFLAGS) $(OBJS) -o build/$@ $(LDFLAGS)
 
 parser: $(OBJS) parsertest.c
-	$(CC) parsertest.c $(CFLAGS) $(OBJS) -o build/$@ $(LDFLAGS)
+	$(CC) parsertest.c -DGENQUAD=0 $(CFLAGS) $(OBJS) -o build/$@ $(LDFLAGS)
 
+quads: $(OBJS) parsertest.c
+	$(CC) parsertest.c -DGENQUAD=1 $(CFLAGS) $(OBJS) -o build/$@ $(LDFLAGS)
 # bison
 $(BUILD_DIR)/%.y.o: %.y
 	$(MKDIR_P) $(dir $@)

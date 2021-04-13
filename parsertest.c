@@ -1,6 +1,12 @@
 #include "build/src/lexer/lexer.l.o.h"
 #include "build/src/parser/parser.y.o.h"
 
+#if GENQUAD == 1
+    int doGenQuad = 1;
+#else
+    int doGenQuad = 0;
+#endif
+
 
 int currLine = 1;
 char currFile[256] = "<stdin>"; //Linux limit is 255

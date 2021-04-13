@@ -5,6 +5,7 @@
 
 extern int currLine;
 extern char currFile[];
+extern int doGenQuad;
 
 void *mallocSafe(size_t size){
     void *ret = malloc(size);
@@ -2098,7 +2099,8 @@ void printFunc(char *fname){
     dumpStatements(currTab->stmtList, 1);
     printf("\n");
 
-    genQuads(currTab->stmtList, NULL, funcIdx, fname);
+    if(doGenQuad)
+        genQuads(currTab->stmtList, NULL, funcIdx, fname);
 
     funcIdx++;
 }
