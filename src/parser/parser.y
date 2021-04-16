@@ -75,7 +75,7 @@
 %type  <hdr> postfix-expression
 %type  <lst> argument-expression-list
 %type  <hdr> unary-expression
-%type  <lexNode> '=' '&' '*' '+' '-' '~' '{' '('
+%type  <lexNode> '=' '&' '*' '+' '-' '~' '!' '{' '('
 %type  <lexNode> unary-operator
 %type  <hdr> cast-expression
 %type  <hdr> multiplicative-expression
@@ -363,6 +363,7 @@ unary-operator:
     |   '+'    {$$ = $1;}
     |   '-'    {$$ = $1;}
     |   '~'    {$$ = $1;}
+    |   '!'    {$$ = $1;}
     ;
 
     /* 6.5.2 - Postfix expressions */

@@ -162,6 +162,9 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                     case '~':
                         fprintf(stderr, "Error: bitwise operations are not implemented\n");
                         exit(EXIT_FAILURE);
+                    case '!':
+                        lastQuad = allocCmpQuad(lastQuad->lval, allocQuadConst(int_type, (LexVals)(NUMTYPE)0ull,false), lastQuad);
+                        break;
                 }
             }
 
@@ -183,6 +186,8 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                     newQuad->lval = (struct astnode_quad_node*)genRegister(newQuad->rval1->dataType->child);
                     newQuad = allocLEAQuad(newQuad, &lastQuad, dontLEA);
                     break;
+                case '!':
+                    newQuad->lval = (struct astnode_quad_node*) genRegister(allocTypespec(int_type));
             }
 
             break;
@@ -565,6 +570,7 @@ enum quad_opcode unopToQop(int op){
         case '*': return QOP_LOAD;
         case '+': return QOP_ADD;
         case '-': return QOP_SUB;
+        case '!': return QOP_CC_EQ;
     }
     fprintf(stderr, "Error: unknown unop %d\n", op);
     exit(EXIT_FAILURE);
