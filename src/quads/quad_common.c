@@ -414,8 +414,10 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                         bool wasNull = lastQuad == NULL;
                         //Insert branch in previous block to continue point in case they weren't in order
                         lastQuad = allocQuadBR(QOP_BR_UNCOND, ctPt, NULL, lastQuad);
-                        if(wasNull)
+                        if(wasNull) {
                             lastQuad->parentBlock = init_block;
+                            init_block->quads = lastQuad;
+                        }
                         lastQuad = NULL;
                         init_block = ctPt;
                         firstQuad = &ctPt->quads;
@@ -526,7 +528,6 @@ struct astnode_quad* argToQuad(struct astnode_hdr *arg, struct astnode_hdr *para
     newQuad->rval1->quadType = QUADNODE_CONST;
     ((struct astnode_quad_const*)newQuad->rval1)->value.num_val.integer_val = numArg;
     //If this function is ever called with lastQuad NULL, this is problematic
-    //TODO: do we need to pass presetLval into here?
     lastQuad = stmtToQuad(arg, lastQuad, firstQuad, lastQuad->parentBlock, false, dontEmit);
     newQuad->rval2 = lastQuad->lval;
 
