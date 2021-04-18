@@ -7,7 +7,7 @@ extern int currLine;
 extern char currFile[];
 extern int doGenQuad;
 
-void *mallocSafe(size_t size){
+void *mallocSafeParse(size_t size){
     void *ret = malloc(size);
     if(ret == NULL){
         yyerror("parser failed to malloc");
@@ -48,57 +48,49 @@ struct astnode_hdr* allocUnop(struct astnode_hdr *opand, int opType){
         exit(EXIT_FAILURE);
     }
 
-    struct astnode_unop *retNode = mallocSafe(sizeof(struct astnode_unop));
+    struct astnode_unop *retNode = mallocSafeParse(sizeof(struct astnode_unop));
     retNode->type = NODE_UNOP;
     retNode->opand = opand;
     retNode->op = opType;
+    retNode->file = currFile;
+    retNode->line = currLine;
     return (struct astnode_hdr *) retNode;
 }
 
 struct astnode_hdr* allocBinop(struct astnode_hdr *left, struct astnode_hdr *right, int opType){
-    struct astnode_binop *retNode = mallocSafe(sizeof(struct astnode_binop));
+    struct astnode_binop *retNode = mallocSafeParse(sizeof(struct astnode_binop));
     retNode->type = NODE_BINOP;
     retNode->left = left;
     retNode->right = right;
     retNode->op = opType;
+    retNode->file = currFile;
+    retNode->line = currLine;
     return (struct astnode_hdr *) retNode;
 }
 
 struct astnode_hdr* allocTerop(struct astnode_hdr *first, struct astnode_hdr *second, struct astnode_hdr *third){
-    struct astnode_terop *retNode = mallocSafe(sizeof(struct astnode_terop));
+    struct astnode_terop *retNode = mallocSafeParse(sizeof(struct astnode_terop));
     retNode->type = NODE_TEROP;
     retNode->first = first;
     retNode->second = second;
     retNode->third = third;
+    retNode->file = currFile;
+    retNode->line = currLine;
     return (struct astnode_hdr *) retNode;
 }
 
-struct astnode_hdr* allocConst(struct LexVal *op, int num){
-    struct LexVal *lexVal = mallocSafe(sizeof(struct LexVal));
+struct astnode_hdr* allocConst(int num){
+    struct LexVal *lexVal = mallocSafeParse(sizeof(struct LexVal));
     lexVal->type = NODE_LEX;
-    if (op != NULL) {
-        lexVal->file = op->file;
-        lexVal->line = op->line;
-    }
 
+    lexVal->file = currFile;
+    lexVal->line = currLine;
     lexVal->tflags = int_type;
     lexVal->value.num_val.integer_val = num;
     lexVal->sym = NUMBER;
 
     return (struct astnode_hdr*)lexVal;
 }
-
-/*struct astnode_hdr* allocPostIncDec(struct LexVal *op, struct astnode_hdr *opand, int opType){
-    struct LexVal *lexVal = mallocSafe(sizeof(struct LexVal));
-    lexVal->type = NODE_LEX;
-    lexVal->file = op->file;
-    lexVal->line = op->line;
-    lexVal->tflags = int_type;
-    lexVal->value.num_val.integer_val = 1;
-    lexVal->sym = NUMBER;
-
-    return (struct astnode_hdr *) allocBinop(opand, allocBinop(opand, (struct astnode_hdr *) lexVal, opType), '=');
-}*/
 
 struct astnode_hdr* allocSizeof(){
     if(currDecl.generic->child->type == NODE_FNCNDEC){
@@ -111,11 +103,10 @@ struct astnode_hdr* allocSizeof(){
         exit(EXIT_FAILURE);
     }
 
-    struct LexVal *lexVal = mallocSafe(sizeof(struct LexVal));
+    struct LexVal *lexVal = mallocSafeParse(sizeof(struct LexVal));
     lexVal->type = NODE_LEX;
     lexVal->file = currDecl.generic->file;
     lexVal->line = currDecl.generic->line;
-    // TODO: target specific type of size_t
     lexVal->tflags = int_type; // to allow greater variety of expressions, may really be other type
     lexVal->value.num_val.integer_val = computeSizeof((struct astnode_hdr*)currDecl.generic, false);
     lexVal->sym = NUMBER;
@@ -131,9 +122,11 @@ struct astnode_cast* allocCast(){
         exit(EXIT_FAILURE);
     }
 
-    struct astnode_cast *cast = mallocSafe(sizeof(struct astnode_cast));
+    struct astnode_cast *cast = mallocSafeParse(sizeof(struct astnode_cast));
     cast->type = NODE_CAST;
     cast->cast_spec = currDecl.generic->child;
+    cast->file = currFile;
+    cast->line = currLine;
 
     clearEntry(currDecl);
 
@@ -170,7 +163,7 @@ struct astnode_hdr* allocAssignment(struct astnode_hdr *left, struct astnode_hdr
 }
 
 struct astnode_lst* allocList(struct astnode_hdr *el){
-    struct astnode_lst *lst = mallocSafe(sizeof(struct astnode_lst));
+    struct astnode_lst *lst = mallocSafeParse(sizeof(struct astnode_lst));
     lst->type = NODE_LST;
     if(el == NULL) {
         lst->numVals = 0;
@@ -178,7 +171,7 @@ struct astnode_lst* allocList(struct astnode_hdr *el){
     }
     else{
         lst->numVals = 1;
-        lst->els = mallocSafe(sizeof(union astnode));
+        lst->els = mallocSafeParse(sizeof(union astnode));
         lst->els[0] = el;
     }
     return lst;
@@ -191,11 +184,13 @@ void addToList(struct astnode_lst *lst, struct astnode_hdr *el){
 }
 
 struct astnode_hdr* allocFunc(struct astnode_hdr *name, struct astnode_lst *lst){
-    struct astnode_fncn *fncn = mallocSafe(sizeof(struct astnode_fncn));
+    struct astnode_fncn *fncn = mallocSafeParse(sizeof(struct astnode_fncn));
 
     fncn->type = NODE_FNCN;
-    fncn->lst = lst; //TODO: verify that args are valid?
+    fncn->lst = lst;
     fncn->name = name;
+    fncn->file = currFile;
+    fncn->line = currLine;
 
     return (struct astnode_hdr *) fncn;
 }
@@ -247,9 +242,8 @@ size_t computeSizeof(struct astnode_hdr* el, bool expr){
                     }
 
                     //If first child is PTR, then don't care about anything else - size is PTR
-                    // TODO: target specific size of pointers
                     if(node != NULL && node->type == NODE_PTR)
-                        return multiplier*sizeof(long);
+                        return multiplier*sizeof(int *);
 
                     if(node->type != NODE_TYPESPEC){
                         fprintf(stderr, "%s:%d: Error: sizeof called, but typespec node isn't of type NODE_TYPESPEC\n", currFile, currLine);
@@ -306,7 +300,7 @@ size_t computeSizeof(struct astnode_hdr* el, bool expr){
 }
 
 size_t getStructSize(struct astnode_tag *structNode, bool ignoreIncomplete){
-    // TODO: alignment issues
+    // Does not take alignment issues into account since structs/unions are not implemented past parsing
     if(structNode->type != NODE_SYMTAB || (structNode->st_type != ENTRY_STAG && structNode->st_type != ENTRY_UTAG)){
         fprintf(stderr, "%s:%d: Error: getStructSize called with node not of type struct/union tag\n", currFile, currLine);
         return 0;
@@ -317,7 +311,6 @@ size_t getStructSize(struct astnode_tag *structNode, bool ignoreIncomplete){
     if(structNode->container != NULL)
         structSymtab = structNode->container;
     else {
-        //TODO: will we always be in the correct symbol table when attempting to compute sizeof?
         union symtab_entry lookupVal = symtabLookup(currTab, TAG, structNode->ident->value.string_val, false, -1);
         if(lookupVal.generic == NULL ||
             (lookupVal.generic->st_type != ENTRY_STAG && lookupVal.generic->st_type != ENTRY_UTAG) ||
@@ -360,7 +353,7 @@ size_t getTabSize(enum tab_type tabType){
 }
 
 struct symtab* symtabCreate(enum symtab_scope scope, enum tab_type tabType, struct LexVal *startLex){
-    struct symtab *symtab = mallocSafe(getTabSize(tabType));
+    struct symtab *symtab = mallocSafeParse(getTabSize(tabType));
     symtab->tabType = tabType;
     symtab->scope = scope;
     symtab->parent = currTab;
@@ -409,7 +402,7 @@ void exitScope(){
         struct symtab_func *funcTab = ((struct symtab_func *) currTab);
         funcTab->parentFunc->defined = true;
 
-        printFunc(funcTab->parentFunc->ident->value.string_val);
+        printFunc(funcTab->parentFunc);
     }
     
     currTab = currTab->parent;
@@ -826,7 +819,6 @@ bool checkCompatibility(struct astnode_spec_inter *entry1, struct astnode_spec_i
             if(spec_node1->stype == ldcomplex_type && spec_node2->stype != ldcomplex_type)
                 return false;
             if(spec_node1->stype == struct_type){
-                // TODO: structs in separate translation units: can be different defs but tags, membs, order (if struct), memb names must be compatible if both complete, if both incomplete only tags have to be the same (6.2.7 1)
                 if(spec_node2->stype != struct_type)
                     return false;
 
@@ -855,34 +847,53 @@ bool checkCompatibilityFncn(struct astnode_fncndec *entry1, struct astnode_fncnd
         exit(EXIT_FAILURE);
     }
 
-    // TODO: Compatibility with unknown params; need type promotions
-    if(!entry1->unknown && !entry2->unknown){
-        if(entry1->args->numVals != entry2->args->numVals || entry1->varArgs != entry2->varArgs)
+    if(!entry1->unknown && !entry2->unknown) {
+        if (entry1->args->numVals != entry2->args->numVals || entry1->varArgs != entry2->varArgs)
             return false;
-        else{
-            for(int i = 0; i < entry1->args->numVals; i++){
-                if(!checkCompatibility((struct astnode_spec_inter*)entry2->args->els[i], (struct astnode_spec_inter*)entry1->args->els[i], false, comp))
+        else {
+            for (int i = 0; i < entry1->args->numVals; i++) {
+                if (!checkCompatibility((struct astnode_spec_inter *) entry2->args->els[i],
+                                        (struct astnode_spec_inter *) entry1->args->els[i], false, comp))
                     return false;
 
                 // keep resaving the param names if func not defined yet, decl w/o def param names don't matter
-                if(!entry1->defined) {
+                if (!entry1->defined) {
                     if (comp)
                         entry1->args->els[i] = entry2->args->els[i];
                     else
                         return false;
                 }
             }
+        }
+    }
+    else if((entry1->unknown || entry2->unknown) && !(entry1->unknown && entry2->unknown)) {
+        struct astnode_fncndec *funcWithArgs = entry1->unknown ? entry2 : entry1;
+        for (int i = 0; i < funcWithArgs->args->numVals; i++) {
+            if (((struct astnode_spec_inter *) funcWithArgs->args->els[i])->child->type == NODE_TYPESPEC) {
+                enum type_flag type = ((struct astnode_typespec *) ((struct astnode_spec_inter *) funcWithArgs->args->els[i])->child)->stype;
+                if (hasFlag(type, char_type) || hasFlag(type, sint_type) ||
+                    hasFlag(type, float_type) && !hasFlag(type, complex_type))
+                    return false;
+            }
 
-            // keep resaving the scope if func not defined yet, decl w/o def scope only has params
-            if(!entry1->defined){
-                if (comp) {
-                    entry1->scope = entry2->scope;
-                    entry1->noIdent = entry2->noIdent;
-                }
+            // keep resaving the param names if func not defined yet, decl w/o def param names don't matter
+            if (!entry1->defined && entry1->unknown) {
+                if (comp)
+                    entry1->args->els[i] = entry2->args->els[i];
                 else
                     return false;
             }
         }
+    }
+
+    // keep resaving the scope if func not defined yet, decl w/o def scope only has params
+    if(!entry1->defined){
+        if (comp) {
+            entry1->scope = entry2->scope;
+            entry1->noIdent = entry2->noIdent;
+        }
+        else
+            return false;
     }
 
     return checkCompatibility(entry1->child, entry2->child, true, comp);
@@ -982,7 +993,7 @@ size_t getEntrySize(enum symtab_type type){
 struct symtab_entry_generic* allocEntry(enum symtab_type type, bool clear){
     struct symtab_entry_generic *ret;
 
-    ret = mallocSafe(getEntrySize(type));
+    ret = mallocSafeParse(getEntrySize(type));
     if(clear)
         clearEntry((union symtab_entry)ret);
     ret->st_type = type;
@@ -1000,7 +1011,7 @@ struct symtab_entry_generic* clearEntry(union symtab_entry entry){
     entry.generic->stgclass = -1;
     entry.generic->type = nodeType; //This should always be NODE_SYMTAB here
 
-    struct astnode_typespec *spec_node = mallocSafe(sizeof(struct astnode_typespec));
+    struct astnode_typespec *spec_node = mallocSafeParse(sizeof(struct astnode_typespec));
     spec_node->type = NODE_TYPESPEC;
     spec_node->parent = (struct astnode_spec_inter*)entry.generic;
     spec_node->child = (struct astnode_spec_inter*)NULL;
@@ -1038,7 +1049,6 @@ void checkDeclDoesStuff(union symtab_entry decl){
 }
 
 void setStgSpec(union symtab_entry entry, struct symtab *symtab, struct LexVal *val){
-    // TODO: stgclass of struct/union VARIABLE applies to all members; no linkage transfer
     if(entry.generic->stgclass == -1){
         if(symtab->scope == SCOPE_FILE && (val->sym == AUTO || val->sym == REGISTER)){
             fprintf(stderr, "%s:%d: Error: file-scope declaration specifies '%s'\n", val->file, val->line, val->sym == AUTO ? "auto" : "register");
@@ -1343,7 +1353,7 @@ struct astnode_fncndec* addFuncArgs(struct astnode_lst *args, struct symtab *sym
 }
 
 struct astnode_ptr* allocPtr(){
-    struct astnode_ptr *ptr = mallocSafe(sizeof(struct astnode_ptr));
+    struct astnode_ptr *ptr = mallocSafeParse(sizeof(struct astnode_ptr));
     ptr->type = NODE_PTR;
     ptr->qtype = 0;
     ptr->type_quals = allocList((struct astnode_hdr*)NULL);
@@ -1388,7 +1398,7 @@ struct astnode_spec_inter* allocAry(struct astnode_spec_inter *next, struct LexV
         exit(EXIT_FAILURE);
     }
 
-    struct astnode_ary *ary = mallocSafe(sizeof(struct astnode_ary));
+    struct astnode_ary *ary = mallocSafeParse(sizeof(struct astnode_ary));
     ary->type = NODE_ARY;
     if(val == NULL)
         ary->complete = false;
@@ -1423,14 +1433,14 @@ void addStmt(struct symtab *symtab, struct astnode_hdr *stmt){
 }
 
 struct astnode_hdr* genNoopStmt(){
-    struct astnode_hdr *noop = mallocSafe(sizeof(struct astnode_hdr));
+    struct astnode_hdr *noop = mallocSafeParse(sizeof(struct astnode_hdr));
     noop->type = NODE_NOOP;
     return noop;
 }
 
 char* autoSprintf(long long inVal){
     size_t neededSize = snprintf(NULL, 0, "%lld", inVal);
-    char *buff = mallocSafe(neededSize+1);
+    char *buff = mallocSafeParse(neededSize+1);
     sprintf(buff, "%lld", inVal);
     return buff;
 }
@@ -1485,11 +1495,13 @@ struct astnode_hdr* genLabel(enum label_type labelType, struct astnode_hdr *val,
 struct astnode_hdr* genCtrl(enum ctrl_type ctrlType, struct astnode_hdr *expr, struct astnode_hdr *stmt,
                             struct astnode_hdr *stmtAlt, struct astnode_hdr *expr2, struct astnode_hdr *expr3,
                             struct symtab *symtab){
-    struct astnode_ctrl *selStmt = mallocSafe(sizeof(struct astnode_ctrl));
+    struct astnode_ctrl *selStmt = mallocSafeParse(sizeof(struct astnode_ctrl));
     selStmt->type = NODE_CTRL;
     selStmt->ctrlType = ctrlType;
     selStmt->caseList = allocList(NULL);
     selStmt->dflt = NULL;
+    selStmt->file = currFile;
+    selStmt->line = currLine;
     if(ctrlType == CTRL_FOR) {
         if(expr == NULL)
             expr = genNoopStmt();
@@ -1520,7 +1532,6 @@ void setSwitchStmt(struct astnode_hdr *swtch, struct astnode_hdr *stmt, struct s
 }
 
 struct astnode_hdr* genJump(enum jump_type jumpType, struct astnode_hdr *val, struct symtab *symtab){
-    // TODO: check that break or continue are in for/while/do (or switch for switch)
     if(jumpType == JUMP_RET){
         while(symtab->scope != SCOPE_FUNC){
             symtab = symtab->parent;
@@ -1543,10 +1554,12 @@ struct astnode_hdr* genJump(enum jump_type jumpType, struct astnode_hdr *val, st
         }
     }
 
-    struct astnode_jump *jmpNode = (struct astnode_jump*)mallocSafe(sizeof(struct astnode_jump));
+    struct astnode_jump *jmpNode = (struct astnode_jump*)mallocSafeParse(sizeof(struct astnode_jump));
     jmpNode->type = NODE_JMP;
     jmpNode->jumpType = jumpType;
     jmpNode->val = val;
+    jmpNode->file = currFile;
+    jmpNode->line = currLine;
     return (struct astnode_hdr*)jmpNode;
 }
 
@@ -2093,14 +2106,14 @@ void printStruct(struct astnode_hdr *structHdr){
     printf("} (size==%zu)\n\n", getStructSize(structNode, false));
 }
 
-void printFunc(char *fname){
+void printFunc(struct astnode_fncndec *func){
     static int funcIdx = 1;
     printf("AST Dump for function\n");
     dumpStatements(currTab->stmtList, 1);
     printf("\n");
 
     if(doGenQuad)
-        genQuads(currTab->stmtList, NULL, funcIdx, fname);
+        genQuads(currTab->stmtList, NULL, funcIdx, func);
 
     funcIdx++;
 }

@@ -10,6 +10,9 @@
 
 int currLine = 1;
 char currFile[256] = "<stdin>"; //Linux limit is 255
+// for quad debugging
+int quadLastLine = 1;
+char quadLastFile[256] = "<stdin>";
 char *currStr = NULL;
 unsigned int currStrLen = 0;
 

@@ -96,28 +96,31 @@ struct basic_block {
     struct basic_block *next,*prev, *brPt, *ctPt;
 };
 
+void *mallocSafeQuad(size_t size);
 //Create a new basic block struct
 struct basic_block* genBasicBlock(struct basic_block *prevBlock, int funcIdx, struct basic_block *existingPtr);
 //Given a list of statement AST nodes, convert to quads, returning first basic block in linked list
-struct basic_block* genQuads(struct astnode_lst *stmtList, struct basic_block *prevBlock, int funcIdx, char *fname);
+struct basic_block* genQuads(struct astnode_lst *stmtList, struct basic_block *prevBlock, int funcIdx, struct astnode_fncndec *func);
 
 //Convert individual statement to quad node, returning last generated quad node in linked list
 //If firstQuad provided, stores first generated quad in this address
 //Init_block references first basic block, which could be changed based on returned astnode_quad* BB
-struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *lastQuad,
-                                struct astnode_quad **firstQuad, struct basic_block *init_block, bool dontLEA, bool dontEmit);
+struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *lastQuad, struct astnode_quad **firstQuad,
+        struct basic_block *init_block, bool dontLEA, bool dontEmit, struct astnode_fncndec *func);
 struct astnode_quad* argToQuad(struct astnode_hdr *arg, struct astnode_hdr *param, struct astnode_quad *lastQuad,
-                               struct astnode_quad **firstQuad, char *fname, int numArg, bool varArg, bool dontEmit);
+        struct astnode_quad **firstQuad, char *fname, int numArg, bool varArg, bool dontEmit, struct astnode_fncndec *func);
 enum quad_opcode unopToQop(int op);
 enum quad_opcode binopToQop(int op);
 struct astnode_quad_register *genRegister(struct astnode_spec_inter *type);
-struct astnode_quad_node *genLval(struct astnode_hdr *node, struct astnode_quad **lastQuad, struct astnode_quad **firstQuad, bool dontEmit, bool mod, bool funcDes);
+struct astnode_quad_node *genLval(struct astnode_hdr *node, struct astnode_quad **lastQuad, struct astnode_quad **firstQuad,
+        struct basic_block *init_block, bool dontEmit, bool mod, bool funcDes, struct astnode_fncndec *func);
 
 bool isInteger(struct astnode_spec_inter *node);
 bool isFloat(struct astnode_spec_inter *node);
 bool isPtr(struct astnode_spec_inter *node);
+bool isScalar(struct astnode_spec_inter *node);
 bool isIncomplete(struct astnode_spec_inter *node);
-void typeCheck(struct astnode_quad *quad, int op, bool unop);
+void typeCheck(struct astnode_quad_node *lval, struct astnode_quad_node *rval1, struct astnode_quad_node *rval2, enum quad_opcode opcode, int op, bool unop);
 void checkFloat(struct astnode_spec_inter *node);
 void assignConvCheck(struct astnode_spec_inter *left, struct astnode_spec_inter *right);
 bool argConvCheck(struct astnode_quad_node *arg, struct astnode_hdr *param);
@@ -139,6 +142,5 @@ struct astnode_quad* allocCCQuad(struct astnode_quad_node *lval, enum quad_opcod
 
 void printQuads(struct basic_block *basicBlock, char *fname);
 void printQuadNode(struct astnode_quad_node *node);
-
 
 #endif //QUAD_COMMON_H

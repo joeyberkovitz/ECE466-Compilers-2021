@@ -6,10 +6,10 @@
 
 int yylex(void);
 void yyerror(char const*);
-void* mallocSafe(size_t size);
+void* mallocSafeParse(size_t size);
 
 void printAst(struct astnode_hdr *hdr, int lvl, bool isFunc);
-void printFunc(char *fname);
+void printFunc(struct astnode_fncndec *func);
 void dumpStatements(struct astnode_lst *stmtLst, int level);
 
 struct astnode_hdr {
@@ -20,23 +20,31 @@ struct astnode_unop {
     enum node_type type;
     int op;
     struct astnode_hdr *opand;
+    char *file;
+    int line;
 };
 
 struct astnode_binop {
     enum node_type type;
     int op;
     struct astnode_hdr *left, *right;
+    char *file;
+    int line;
 };
 
 struct astnode_terop {
     enum node_type type;
     struct astnode_hdr *first, *second, *third;
+    char *file;
+    int line;
 };
 
 struct astnode_cast {
     enum node_type type;
     struct astnode_spec_inter *cast_spec;
     struct astnode_hdr *opand;
+    char *file;
+    int line;
 };
 
 struct astnode_lst {
@@ -49,6 +57,8 @@ struct astnode_fncn {
     enum node_type type;
     struct astnode_hdr *name;
     struct astnode_lst *lst;
+    char *file;
+    int line;
 };
 
 enum ctrl_type {
@@ -65,6 +75,8 @@ struct astnode_ctrl {
     struct astnode_hdr *ctrlExpr; //for FOR loop - expect a list here
     struct astnode_hdr *stmt;
     struct astnode_hdr *stmtSecondary;
+    char *file;
+    int line;
 
     // for switch
     struct astnode_lst *caseList;
@@ -83,13 +95,15 @@ struct astnode_jump {
     struct astnode_hdr;
     enum jump_type jumpType;
     struct astnode_hdr *val; //Ident for GOTO, expression for RETURN
+    char *file;
+    int line;
 };
 
 struct astnode_hdr*  allocUnop(struct astnode_hdr *opand, int opType);
 struct astnode_hdr*  allocBinop(struct astnode_hdr *left, struct astnode_hdr *right, int opType);
 struct astnode_hdr*  allocTerop(struct astnode_hdr *first, struct astnode_hdr *second, struct astnode_hdr *third);
 
-struct astnode_hdr* allocConst(struct LexVal *op, int num);
+struct astnode_hdr* allocConst(int num);
 struct astnode_hdr*  allocSizeof();
 struct astnode_cast*  allocCast();
 struct astnode_hdr*  allocAssignment(struct astnode_hdr *left, struct astnode_hdr *right, struct LexVal *opType);
@@ -143,12 +157,6 @@ enum linkage_type {
     LINK_EXT,
     LINK_INT,
     LINK_NONE
-};
-
-enum entry_spec_type {
-    SPEC_STORAGE,
-    SPEC_TYPE_SPEC,
-    SPEC_TYPE_QUAL
 };
 
 enum storage_class {

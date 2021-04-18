@@ -237,7 +237,7 @@ jump-statement:
 
     /* 6.6 - constant expressions */
 constant-expression:
-        conditional-expression              {$$ = $1; /*TODO: compute value at quad stage */}
+        conditional-expression              {$$ = $1;}
     ;
 
     /* 6.5.17 - Comma expressions */
@@ -349,10 +349,9 @@ cast-expression:
     /* 6.5.3 - Unary expressions */
 unary-expression:
         postfix-expression             {$$ = $1;}
-    |   PLUSPLUS unary-expression      {$$ = allocBinop($2, allocBinop($2, allocConst($1, 1), '+'), '=');}
-    |   MINUSMINUS unary-expression    {$$ = allocBinop($2, allocBinop($2, allocConst($1, 1), '-'), '=');}
+    |   PLUSPLUS unary-expression      {$$ = allocBinop($2, allocBinop($2, allocConst(1), '+'), '=');}
+    |   MINUSMINUS unary-expression    {$$ = allocBinop($2, allocBinop($2, allocConst(1), '-'), '=');}
     |   unary-operator cast-expression {$$ = allocUnop($2, $1->sym);}
-    /* TODO: compute sizeof for expression at quad stage */
     |   SIZEOF unary-expression        {$$ = allocUnop($2, SIZEOF);}
     |   SIZEOF '(' type-name ')'       {$$ = allocSizeof();}
     ;
@@ -370,7 +369,6 @@ unary-operator:
 postfix-expression:
     /* compound literals excluded from compiler */
         primary-expression                                  {$$ = $1;}
-        /* TODO: check types; Array subscripting: $1 should be pointer, $3 should be offset */
     |   postfix-expression '[' expression ']'               {$$ = allocUnop(allocBinop($1, $3, '+'), '*');}
     |   postfix-expression '(' argument-expression-list ')' {$$ = allocFunc($1, $3);}
     |   postfix-expression '(' ')'                          {$$ = allocFunc($1, allocList(NULL));}
