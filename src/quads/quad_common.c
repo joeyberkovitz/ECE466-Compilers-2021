@@ -70,8 +70,16 @@ struct basic_block* genQuads(struct astnode_lst *stmtList, struct basic_block *p
         }
     }
 
-    if(prevBlock == NULL)
+    if(prevBlock == NULL) {
+        if (lastQuad == NULL || lastQuad->opcode != QOP_RETURN) {
+            struct astnode_quad *retQuad = allocQuad(QOP_RETURN, NULL, NULL, lastQuad);
+            if (lastQuad == NULL) {
+                retQuad->parentBlock = initBlock;
+                *firstQuad = retQuad;
+            }
+        }
         printQuads(initBlock, func->ident->value.string_val);
+    }
     return initBlock;
 }
 
@@ -417,7 +425,7 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
             newQuad->rval1 = lastQuad->lval;
             struct astnode_fncndec *fncnCall = (struct astnode_fncndec*)stmtUnion.fncn->name;
             for (int i = 0; i < stmtUnion.fncn->lst->numVals; i++){
-                if (i < fncnCall->args->numVals)
+                if (fncnCall->args != NULL && i < fncnCall->args->numVals)
                     lastQuad = argToQuad(stmtUnion.fncn->lst->els[i], fncnCall->args->els[i], lastQuad, firstQuad,
                                          fncnCall->ident->value.string_val, i, false, dontEmit, func);
                 else{
@@ -536,9 +544,12 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                     break;
                 case JUMP_RET:
                     newQuad->opcode = QOP_RETURN;
-                    lastQuad = stmtToQuad(stmtUnion.jump->val, lastQuad, firstQuad, LASTBB(lastQuad, init_block), false, dontEmit, func);
-                    newQuad->rval1 = lastQuad->lval;
-                    assignConvCheck(func->child, newQuad->rval1->dataType);
+                    if (stmtUnion.jump->val->type != NODE_NOOP) {
+                        lastQuad = stmtToQuad(stmtUnion.jump->val, lastQuad, firstQuad, LASTBB(lastQuad, init_block),
+                                              false, dontEmit, func);
+                        newQuad->rval1 = lastQuad->lval;
+                        assignConvCheck(func->child, newQuad->rval1->dataType);
+                    }
                     break;
             }
             break;
