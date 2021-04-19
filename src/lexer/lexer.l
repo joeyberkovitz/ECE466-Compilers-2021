@@ -150,7 +150,7 @@ _Imaginary			{RET(_IMAGINARY)}
 <INITIAL>L\'								{BEGIN(WCHAR_CONST); initString();}
 <INITIAL>\"								{BEGIN(STR_LIT); initString();}
 <INITIAL>L\"								{BEGIN(WSTR_LIT); initString();}
-<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>[^\\'"\n<<EOF>>]+		{addChars(yytext, yyleng, 0);}
+<CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>[^\\'"\n]+		{addChars(yytext, yyleng, 0);}
 	/* Note: start at second char - ignore "\" */
 <CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>{ESCCHAR}			{addChars(yytext+1, yyleng-1, flag_escaped);}
 <CHAR_CONST,WCHAR_CONST>\"						{addChars("\"", 1, 0);}
@@ -158,8 +158,10 @@ _Imaginary			{RET(_IMAGINARY)}
 <CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>\\[0-7]{1,3}			{addChars(yytext+1, yyleng-1, flag_octal);}
 <CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>\\{HEXSTR}			{addChars(yytext+2, yyleng-2, flag_hex);}
 <CHAR_CONST,WCHAR_CONST,STR_LIT,WSTR_LIT>{INVALIDESC}			{fprintf(stderr, "%s:%d: Warning: Invalid escape character: '%s'\n", currFile, currLine, yytext);}
-<CHAR_CONST,WCHAR_CONST>[\n<<EOF>>]					{BEGIN(INITIAL); resetString(); fprintf(stderr, "%s:%d: Error: missing terminating ' character\n", currFile, currLine);}
-<STR_LIT,WSTR_LIT>[\n<<EOF>>]                           		{BEGIN(INITIAL); resetString(); fprintf(stderr, "%s:%d: Error: missing terminating \" character\n", currFile, currLine);}
+<CHAR_CONST,WCHAR_CONST>\n					{BEGIN(INITIAL); resetString(); fprintf(stderr, "%s:%d: Error: missing terminating ' character\n", currFile, currLine);}
+<CHAR_CONST,WCHAR_CONST><<EOF>>					{BEGIN(INITIAL); resetString(); fprintf(stderr, "%s:%d: Error: missing terminating ' character\n", currFile, currLine);}
+<STR_LIT,WSTR_LIT>\n                           		{BEGIN(INITIAL); resetString(); fprintf(stderr, "%s:%d: Error: missing terminating \" character\n", currFile, currLine);}
+<STR_LIT,WSTR_LIT><<EOF>>                           		{BEGIN(INITIAL); resetString(); fprintf(stderr, "%s:%d: Error: missing terminating \" character\n", currFile, currLine);}
 <CHAR_CONST,WCHAR_CONST>\'						{BEGIN(INITIAL); if(currStrLen > 1) {processLine(); endChar(yylval); yylval.lexNode->sym = CHARLIT; return CHARLIT;} resetString(); fprintf(stderr, "%s:%d: Error: invalid empty character literal\n", currFile, currLine);}
 <STR_LIT,WSTR_LIT>\"							{BEGIN(INITIAL); processLine(); endString(yylval); yylval.lexNode->sym = STRING; return STRING;}
 
