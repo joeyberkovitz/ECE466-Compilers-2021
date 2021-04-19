@@ -28,4 +28,6 @@ int func1(){
 	}
 	else
 		printf("Error: test global <= 0\n");
+	
+	return 0;
 }
