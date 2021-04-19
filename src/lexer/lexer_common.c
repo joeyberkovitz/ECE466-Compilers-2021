@@ -15,12 +15,13 @@ void *mallocSafeLex(size_t size){
 }
 
 int print_esc_str(FILE *stream, const struct printf_info *info, const void *const *args){
-	const struct LexVal *lexVal;
-	lexVal = *((const struct LexVal **)(args[0]));
+	const char *lexVal;
+	lexVal = *((const char**)(args[0]));
 	
 	int printLen = 0;
-	for(int i = 0; i < lexVal->len - 1; i++){
-		char printChar = lexVal->value.string_val[i];
+	int pos = 0;
+    while (lexVal[pos] != '\0'){
+		char printChar = lexVal[pos];
 		if(printChar == 34)
 			printLen += fprintf(stream, "\\\"");
 		else if(printChar == 39)
@@ -47,6 +48,7 @@ int print_esc_str(FILE *stream, const struct printf_info *info, const void *cons
 			printLen += fprintf(stream, "\\v");
 		else
 			printLen += fprintf(stream, "\\%03o", (unsigned char)printChar);
+		pos++;
 	}
 	
 	return printLen;
@@ -218,6 +220,7 @@ void addChars(char *txt, size_t len, int flags){
 }
 
 void endString(union astnode val){
+    currStr[currStrLen-1] = '\0';
 	val.lexNode->value.string_val = currStr;
 	val.lexNode->len = currStrLen;
 	val.lexNode->tflags = char_type;
@@ -228,9 +231,9 @@ void endChar(union astnode val){
 	if(currStrLen > 2){
 		fprintf(stderr, "%s:%d:Warning:Unsupported multibyte character literal truncated to first byte\n", currFile, currLine);
 		currStr = realloc(currStr, 2);
-		currStr[1] = '\0';
 	}
-	val.lexNode->value.string_val = currStr;
+    currStr[1] = '\0';
+    val.lexNode->value.string_val = currStr;
 	val.lexNode->len = 2;
 	val.lexNode->tflags = char_type;
 	resetString();

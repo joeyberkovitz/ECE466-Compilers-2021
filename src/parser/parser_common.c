@@ -1600,7 +1600,7 @@ void printAst(struct astnode_hdr *hdr, int lvl, bool isFunc){
                 case CHARLIT:
                     printf("CONSTANT: (type=int)%d\n", node->lexNode->value.string_val[0]); break;
                 case STRING:
-                    printf("STRING   %S\n", (wchar_t *) node->lexNode); break;
+                    printf("STRING   %S\n", (wchar_t *) node->lexNode->value.string_val); break;
             }
             break;
         case NODE_UNOP:

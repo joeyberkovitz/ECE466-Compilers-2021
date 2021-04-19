@@ -1089,7 +1089,7 @@ void printQuadNode(struct astnode_quad_node *node){
         case QUADNODE_CONST: ;
             struct astnode_quad_const *constNode = (struct astnode_quad_const*)node;
             if (constNode->string)
-                printf("%s", constNode->value.string_val);
+                printf("%S", (wchar_t*)constNode->value.string_val);
             else
                 printf("%lld", constNode->value.num_val.integer_val);
 
