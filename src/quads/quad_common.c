@@ -429,7 +429,7 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                     lastQuad = argToQuad(stmtUnion.fncn->lst->els[i], fncnCall->args->els[i], lastQuad, firstQuad,
                                          fncnCall->ident->value.string_val, i, false, dontEmit, func);
                 else{
-                    if(fncnCall->varArgs)
+                    if(fncnCall->varArgs || fncnCall->unknown)
                         lastQuad = argToQuad(stmtUnion.fncn->lst->els[i], NULL, lastQuad, firstQuad,
                                              fncnCall->ident->value.string_val, i, true, dontEmit, func);
                     else{
