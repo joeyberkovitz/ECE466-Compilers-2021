@@ -1,0 +1,180 @@
+printf is defined at qtests/fullTest.c:1 [in global scope starting at qtests/fullTest.c:1] as a 
+extern   function returning
+   int
+  and taking unknown arguments
+
+testGlob is defined at qtests/fullTest.c:3 [in global scope starting at qtests/fullTest.c:1] as a 
+variable with stgclass extern  of type:
+  int
+
+func1 is defined at qtests/fullTest.c:5 [in global scope starting at qtests/fullTest.c:1] as a 
+extern   function returning
+   int
+  and taking unknown arguments
+
+testLoc is defined at qtests/fullTest.c:6 [in function scope starting at qtests/fullTest.c:5] as a 
+variable with stgclass auto  of type:
+  int
+
+arr is defined at qtests/fullTest.c:7 [in function scope starting at qtests/fullTest.c:5] as a 
+variable with stgclass auto  of type:
+  array of  5 elements of type
+   int
+
+i is defined at qtests/fullTest.c:15 [in function scope starting at qtests/fullTest.c:5] as a 
+variable with stgclass auto  of type:
+  int
+
+ptr is defined at qtests/fullTest.c:22 [in function scope starting at qtests/fullTest.c:5] as a 
+variable with stgclass auto  of type:
+  pointer to 
+   int
+
+AST Dump for function
+ LIST {
+  ASSIGNMENT
+   stab_var name=testGlob def @qtests/fullTest.c:3
+   CONSTANT: (type=int)1
+  ASSIGNMENT
+   stab_var name=testLoc def @qtests/fullTest.c:6
+   BINARY OP +
+    stab_var name=testGlob def @qtests/fullTest.c:3
+    CONSTANT: (type=int)1
+  ASSIGNMENT
+   stab_var name=testGlob def @qtests/fullTest.c:3
+   BINARY OP +
+    stab_var name=testLoc def @qtests/fullTest.c:6
+    CONSTANT: (type=int)3
+  WHILE, EXPR:
+   COMPARISON OP <
+    stab_var name=i def @qtests/fullTest.c:15
+    CONSTANT: (type=int)5
+  BODY:
+   LIST {
+    ASSIGNMENT
+     DEREF
+      BINARY OP +
+       stab_var name=arr def @qtests/fullTest.c:7
+       stab_var name=i def @qtests/fullTest.c:15
+     stab_var name=i def @qtests/fullTest.c:15
+    UNARY OP POSTINC
+     stab_var name=i def @qtests/fullTest.c:15
+    FNCALL, 2 arguments
+     stab_fn name=printf def @qtests/fullTest.c:1
+    arg #1=
+     STRING   Arr[i] = %d\n
+    arg #2=
+     DEREF
+      BINARY OP +
+       stab_var name=arr def @qtests/fullTest.c:7
+       stab_var name=i def @qtests/fullTest.c:15
+   }
+  ASSIGNMENT
+   stab_var name=ptr def @qtests/fullTest.c:22
+   ADDRESSOF
+    stab_var name=testGlob def @qtests/fullTest.c:3
+  IF:
+   COMPARISON OP >
+    DEREF
+     stab_var name=ptr def @qtests/fullTest.c:22
+    CONSTANT: (type=int)0
+  THEN:
+   LIST {
+    FNCALL, 2 arguments
+     stab_fn name=printf def @qtests/fullTest.c:1
+    arg #1=
+     STRING   Test global value: %d\n
+    arg #2=
+     DEREF
+      stab_var name=ptr def @qtests/fullTest.c:22
+   }
+  ELSE:
+   FNCALL, 1 arguments
+    stab_fn name=printf def @qtests/fullTest.c:1
+   arg #1=
+    STRING   Error: test global <= 0\n
+  RETURN:
+   CONSTANT: (type=int)0
+ }
+
+func1:
+.BB1.1
+	%T00001 = MOV 1
+	testGlob{global} = MOV %T00001
+	%T00002 = MOV testGlob{global}
+	%T00003 = MOV 1
+	%T00004 = ADD %T00002,%T00003
+	testLoc{lvar} = MOV %T00004
+	%T00005 = MOV testLoc{lvar}
+	%T00006 = MOV 3
+	%T00007 = ADD %T00005,%T00006
+	testGlob{global} = MOV %T00007
+	          BR .BB1.2
+
+.BB1.2
+	%T00008 = MOV i{lvar}
+	%T00009 = MOV 5
+	          CMP %T00008,%T00009
+	%T00010 = CC_LT 
+	          CMP %T00010,0
+	          BR_NEQ .BB1.3,.BB1.4
+
+.BB1.3
+	%T00011 = MOV i{lvar}
+	%T00012 = LEA arr{lvar}
+	%T00013 = MOV i{lvar}
+	%T00014 = MUL 4,%T00013
+	%T00015 = ADD %T00012,%T00014
+	          STORE %T00011,%T00015
+	%T00016 = LOAD %T00015
+	%T00017 = MOV i{lvar}
+	%T00018 = MOV 1
+	%T00019 = ADD %T00017,%T00018
+	i{lvar} = MOV %T00019
+	%T00020 = MOV %T00017
+	%T00021 = LEA printf{global}
+	%T00022 = LEA Arr[i] = %d\n
+	          ARG 0,%T00022
+	%T00023 = LEA arr{lvar}
+	%T00024 = MOV i{lvar}
+	%T00025 = MUL 4,%T00024
+	%T00026 = ADD %T00023,%T00025
+	%T00027 = LOAD %T00026
+	          ARG 1,%T00027
+	%T00028 = CALL %T00021,2
+	          BR .BB1.2
+
+.BB1.4
+	          NOOP 
+	%T00029 = LEA testGlob{global}
+	ptr{lvar} = MOV %T00029
+	%T00030 = MOV ptr{lvar}
+	%T00031 = LOAD %T00030
+	%T00032 = MOV 0
+	          CMP %T00031,%T00032
+	%T00033 = CC_GT 
+	          CMP %T00033,0
+	          BR_NEQ .BB1.5,.BB1.6
+
+.BB1.5
+	%T00034 = LEA printf{global}
+	%T00035 = LEA Test global value: %d\n
+	          ARG 0,%T00035
+	%T00036 = MOV ptr{lvar}
+	%T00037 = LOAD %T00036
+	          ARG 1,%T00037
+	%T00038 = CALL %T00034,2
+	          BR .BB1.7
+
+.BB1.6
+	%T00039 = LEA printf{global}
+	%T00040 = LEA Error: test global <= 0\n
+	          ARG 0,%T00040
+	%T00041 = CALL %T00039,1
+	          BR .BB1.7
+
+.BB1.7
+	          NOOP 
+	%T00042 = MOV 0
+	          RETURN %T00042
+
