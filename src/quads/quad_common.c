@@ -571,8 +571,16 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
     }
 
     if (stmt->type == NODE_UNOP && (stmtUnion.unNode->op == PLUSPLUS || stmtUnion.unNode->op == MINUSMINUS)){
-        struct astnode_hdr *binop = allocBinop(stmtUnion.unNode->opand, allocBinop(stmtUnion.unNode->opand, allocConst(1), stmtUnion.unNode->op == PLUSPLUS ? '+' : '-'), '=');
-        lastQuad = stmtToQuad(binop, newQuad, firstQuad, LASTBB(lastQuad, init_block), false, dontEmit, func);
+        lastQuad = allocQuad(QOP_MOVE, allocQuadConst(int_type, (LexVals)(NUMTYPE)1ull, false), NULL, newQuad);
+        lastQuad->lval = (struct astnode_quad_node*) genRegister(lastQuad->rval1->dataType);
+        lastQuad = allocQuad(QOP_ADD, newQuad->lval, lastQuad->lval, lastQuad);
+        lastQuad->lval = (struct astnode_quad_node*) genRegister(lastQuad->rval1->dataType);
+        lastQuad = allocQuad(QOP_MOVE, lastQuad->lval, NULL, lastQuad);
+        lastQuad->lval = newQuad->rval1;
+        /*struct astnode_hdr *binop = allocBinop(stmtUnion.unNode->opand, allocBinop(stmtUnion.unNode->opand, allocConst(1), stmtUnion.unNode->op == PLUSPLUS ? '+' : '-'), '=');
+        lastQuad = stmtToQuad(binop, newQuad, firstQuad, LASTBB(lastQuad, init_block), false, dontEmit, func);*/
+        newQuad = allocQuad(QOP_MOVE, newQuad->lval, NULL, lastQuad);
+        newQuad->lval = (struct astnode_quad_node*) genRegister(newQuad->rval1->dataType);
     }
 
     return newQuad;
