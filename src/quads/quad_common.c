@@ -95,6 +95,7 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
     }
 
     struct astnode_quad *newQuad = mallocSafeQuad(sizeof(struct astnode_quad));
+    bool isUSignedTmp = false;
     newQuad->type = NODE_QUAD;
     newQuad->parentBlock = init_block;
     newQuad->lval = newQuad->rval1 = newQuad->rval2 = NULL;
@@ -185,7 +186,11 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                         exit(EXIT_FAILURE);
                     case '!':
                         typeCheck(NULL, lastQuad->lval, NULL, newQuad->opcode, stmtUnion.unNode->op, true);
-                        lastQuad = allocCmpQuad(lastQuad->lval, allocQuadConst(int_type, (LexVals)(NUMTYPE)0ull,false), lastQuad);
+                        isUSignedTmp = hasFlag(getType(lastQuad->lval->dataType), unsigned_type);
+                        if(isUSignedTmp)
+                            newQuad->opcode = QOP_CC_EQU;
+                        lastQuad = allocCmpQuad(lastQuad->lval, allocQuadConst(
+                                getType(lastQuad->lval->dataType), (LexVals)(NUMTYPE)0ull,false), lastQuad);
                         break;
                 }
             }
@@ -221,14 +226,19 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                 case '&':
                 case '|':
                 case '^':
-                    fprintf(stderr, "%s:%d: Error: bitwise operators are not implemented\n", quadLastFile, quadLastLine);
+                    fprintf(stderr, "%s:%d: Error: bitwise operators are not implemented\n", quadLastFile,
+                            quadLastLine);
                     exit(EXIT_FAILURE);
                 case '=':
-                    lastQuad = stmtToQuad(stmtUnion.binNode->right, lastQuad, firstQuad, LASTBB(lastQuad, init_block), false, dontEmit, func);
+                    lastQuad = stmtToQuad(stmtUnion.binNode->right, lastQuad, firstQuad, LASTBB(lastQuad, init_block),
+                                          false, dontEmit, func);
                     newQuad->rval1 = lastQuad->lval;
-                    struct astnode_quad_node *lnode = genLval(stmtUnion.binNode->left, &lastQuad, firstQuad, LASTBB(lastQuad, init_block), dontEmit, true, false, func);
-                    if (lnode == NULL){
-                        fprintf(stderr, "%s:%d: Error: modifiable lvalue required as left operand of assignment\n", quadLastFile, quadLastLine);
+                    struct astnode_quad_node *lnode = genLval(stmtUnion.binNode->left, &lastQuad, firstQuad,
+                                                              LASTBB(lastQuad, init_block), dontEmit, true, false,
+                                                              func);
+                    if (lnode == NULL) {
+                        fprintf(stderr, "%s:%d: Error: modifiable lvalue required as left operand of assignment\n",
+                                quadLastFile, quadLastLine);
                         exit(EXIT_FAILURE);
                     }
 
@@ -247,69 +257,86 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                         newQuad = mallocSafeQuad(sizeof(struct astnode_quad));
                         newQuad->opcode = QOP_LOAD;
                         newQuad->rval1 = lnode;
-                        newQuad->lval = (struct astnode_quad_node*) genRegister(lnode->dataType->child);
+                        newQuad->lval = (struct astnode_quad_node *) genRegister(lnode->dataType->child);
                         newQuad = allocLEAQuad(newQuad, &lastQuad, dontLEA);
-                    }
-                    else {
+                    } else {
                         newQuad->opcode = QOP_MOVE;
                         newQuad->lval = lnode;
                         typeCheck(newQuad->lval, newQuad->rval1, NULL, newQuad->opcode, '=', false);
                     }
 
                     if (newQuad->lval->dataType->type == NODE_PTR)
-                        ((struct astnode_ptr*)newQuad->lval->dataType)->qtype = 0;
+                        ((struct astnode_ptr *) newQuad->lval->dataType)->qtype = 0;
                     if (newQuad->lval->dataType->type == NODE_TYPESPEC)
-                        ((struct astnode_typespec*)newQuad->lval->dataType)->qtype = 0;
+                        ((struct astnode_typespec *) newQuad->lval->dataType)->qtype = 0;
 
                     break;
                 case '.':
                     fprintf(stderr, "%s:%d: Error: struct member access unimplemented\n", quadLastFile, quadLastLine);
                     exit(EXIT_FAILURE);
                 case ',':
-                    lastQuad = stmtToQuad(stmtUnion.binNode->left, lastQuad, firstQuad, LASTBB(lastQuad, init_block), false, dontEmit, func);
+                    lastQuad = stmtToQuad(stmtUnion.binNode->left, lastQuad, firstQuad, LASTBB(lastQuad, init_block),
+                                          false, dontEmit, func);
                     lastQuad->lval->dataType = allocTypespec(void_type);
-                    lastQuad = stmtToQuad(stmtUnion.binNode->right, lastQuad, firstQuad, LASTBB(lastQuad, init_block), false, dontEmit, func);
+                    lastQuad = stmtToQuad(stmtUnion.binNode->right, lastQuad, firstQuad, LASTBB(lastQuad, init_block),
+                                          false, dontEmit, func);
                     return lastQuad;
                 case LOGAND:
                 case LOGOR: {
                     //Process left stmt
-                    lastQuad = stmtToQuad(stmtUnion.binNode->left, lastQuad, firstQuad, LASTBB(lastQuad, init_block), false, dontEmit, func);
+                    lastQuad = stmtToQuad(stmtUnion.binNode->left, lastQuad, firstQuad, LASTBB(lastQuad, init_block),
+                                          false, dontEmit, func);
                     typeCheck(NULL, lastQuad->lval, NULL, lastQuad->opcode, stmtUnion.binNode->op, false);
                     // If in sizeof, just return noop with type int_type
-                    if (dontEmit){
-                        lastQuad = stmtToQuad(stmtUnion.binNode->right, NULL, firstQuad, LASTBB(lastQuad, init_block), false, dontEmit, func);
+                    if (dontEmit) {
+                        lastQuad = stmtToQuad(stmtUnion.binNode->right, NULL, firstQuad, LASTBB(lastQuad, init_block),
+                                              false, dontEmit, func);
                         typeCheck(NULL, lastQuad->lval, NULL, lastQuad->opcode, stmtUnion.binNode->op, false);
                         newQuad->opcode = QOP_NOP;
-                        newQuad->lval = (struct astnode_quad_node*)genRegister(allocTypespec(int_type));
+                        newQuad->lval = (struct astnode_quad_node *) genRegister(allocTypespec(int_type));
                         break;
                     }
 
+                    isUSignedTmp = hasFlag(getType(lastQuad->lval->dataType), unsigned_type);
                     lastQuad = allocCmpQuad(
-                        lastQuad->lval,
-                        allocQuadConst(int_type, (LexVals) (NUMTYPE) 0ull, false),
-                        lastQuad
+                            lastQuad->lval,
+                            allocQuadConst(getType(lastQuad->lval->dataType), (LexVals) (NUMTYPE) 0ull, false),
+                            lastQuad
                     );
 
-                    struct astnode_quad_node *logLval = (struct astnode_quad_node*)genRegister(allocTypespec(int_type));
+                    struct astnode_quad_node *logLval = (struct astnode_quad_node *) genRegister(
+                            allocTypespec(int_type));
                     //If left stmt == true for LOGAND || left stmt == false for LOGOR, keep going
-                        //Put result of right into logLval
+                    //Put result of right into logLval
                     //Else - put 1 into logLval for LOGOR, 0 into logLval for LOGAND
-                    struct basic_block *leftBB = genBasicBlock(lastQuad->parentBlock, lastQuad->parentBlock->funcIdx, NULL);
+                    struct basic_block *leftBB = genBasicBlock(lastQuad->parentBlock, lastQuad->parentBlock->funcIdx,
+                                                               NULL);
                     struct basic_block *rightBB = genBasicBlock(leftBB, lastQuad->parentBlock->funcIdx, NULL);
                     struct basic_block *newBB = genBasicBlock(rightBB, lastQuad->parentBlock->funcIdx, NULL);
-                    lastQuad = allocQuadBR(stmtUnion.binNode->op == LOGAND ? QOP_BR_EQ : QOP_BR_NEQ, leftBB, rightBB, lastQuad);
+                    lastQuad = allocQuadBR(
+                            stmtUnion.binNode->op == LOGAND ?
+                            isUSignedTmp ? QOP_BR_EQU : QOP_BR_EQ :
+                            isUSignedTmp ? QOP_BR_NEQU : QOP_BR_NEQ,
+                            leftBB, rightBB, lastQuad);
 
                     //Left side - if we got here, then return 1 for LOGOR, 0 for LOGAND
                     lastQuad = allocMoveQuad(logLval, allocQuadConst(int_type,
-                                             (LexVals) (NUMTYPE) (stmtUnion.binNode->op == LOGAND ? 0ull : 1ull), false), NULL);
+                                                                     (LexVals) (NUMTYPE) (stmtUnion.binNode->op ==
+                                                                                          LOGAND ? 0ull : 1ull), false),
+                                             NULL);
                     leftBB->quads = lastQuad;
                     lastQuad = allocQuadBR(QOP_BR_UNCOND, newBB, NULL, lastQuad);
 
                     //Right side - evaluate stmt, CMP to 0, store in logLval, return to newBB
-                    lastQuad = stmtToQuad(stmtUnion.binNode->right, NULL, &rightBB->quads, rightBB, false, dontEmit, func);
-                    lastQuad = allocCmpQuad(lastQuad->lval, allocQuadConst(int_type, (LexVals) (NUMTYPE) 0ull, false), lastQuad);
+                    lastQuad = stmtToQuad(stmtUnion.binNode->right, NULL, &rightBB->quads, rightBB, false, dontEmit,
+                                          func);
+
+                    isUSignedTmp = hasFlag(getType(lastQuad->lval->dataType), unsigned_type);
+                    lastQuad = allocCmpQuad(lastQuad->lval,
+                                            allocQuadConst(getType(lastQuad->lval->dataType), (LexVals) (NUMTYPE) 0ull,
+                                                           false), lastQuad);
                     typeCheck(NULL, lastQuad->rval1, NULL, lastQuad->opcode, stmtUnion.binNode->op, false);
-                    lastQuad = allocCCQuad(logLval, QOP_CC_NEQ, lastQuad);
+                    lastQuad = allocCCQuad(logLval, isUSignedTmp ? QOP_CC_NEQU : QOP_CC_NEQ, lastQuad);
                     lastQuad = allocQuadBR(QOP_BR_UNCOND, newBB, NULL, lastQuad);
 
                     //Create NO-OP QUAD to carry new basic block
@@ -317,7 +344,7 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                     lastQuad = NULL; //Reset last quad for new BB
                     newQuad->opcode = QOP_NOP;
                     newQuad->parentBlock = newBB;
-                    newQuad->lval = (struct astnode_quad_node*)logLval; //set lval so that future ops can find it
+                    newQuad->lval = (struct astnode_quad_node *) logLval; //set lval so that future ops can find it
                     break;
                 }
                 case '>':
@@ -327,57 +354,66 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                 case EQEQ:
                 case NOTEQ: {
                     struct astnode_quad_node *tmpLnode, *tmpRnode;
-                    lastQuad = stmtToQuad(stmtUnion.binNode->left, lastQuad, firstQuad, LASTBB(lastQuad, init_block), false, dontEmit, func);
+                    lastQuad = stmtToQuad(stmtUnion.binNode->left, lastQuad, firstQuad, LASTBB(lastQuad, init_block),
+                                          false, dontEmit, func);
                     tmpLnode = lastQuad->lval;
 
-                    lastQuad = stmtToQuad(stmtUnion.binNode->right, lastQuad, firstQuad, LASTBB(lastQuad, init_block), false, dontEmit, func);
+                    lastQuad = stmtToQuad(stmtUnion.binNode->right, lastQuad, firstQuad, LASTBB(lastQuad, init_block),
+                                          false, dontEmit, func);
                     tmpRnode = lastQuad->lval;
 
                     lastQuad = allocCmpQuad(tmpLnode, tmpRnode, lastQuad);
-                    newQuad->opcode = binopToQop(stmtUnion.binNode->op);
+                    newQuad->opcode = binopToQop(stmtUnion.binNode->op,
+                                                 hasFlag(getType(tmpLnode->dataType), unsigned_type));
                     newQuad->lval = (struct astnode_quad_node *) genRegister(allocTypespec(int_type));
                     typeCheck(NULL, lastQuad->rval1, lastQuad->rval2, lastQuad->opcode, stmtUnion.binNode->op, false);
                     break;
                 }
-                default:
-                    newQuad->opcode = binopToQop(stmtUnion.binNode->op);
+                default: {
                     unsigned long long size = 0;
                     bool ptr1 = false, ptrDiff = false;
-                    lastQuad = stmtToQuad(stmtUnion.binNode->left, lastQuad, firstQuad, LASTBB(lastQuad, init_block), false, dontEmit, func);
+                    lastQuad = stmtToQuad(stmtUnion.binNode->left, lastQuad, firstQuad, LASTBB(lastQuad, init_block),
+                                          false, dontEmit, func);
+                    isUSignedTmp = hasFlag(getType(lastQuad->lval->dataType), unsigned_type);
+                    newQuad->opcode = binopToQop(stmtUnion.binNode->op, isUSignedTmp);
                     newQuad->rval1 = lastQuad->lval;
-                    if ((stmtUnion.binNode->op == '+' || stmtUnion.binNode->op == '-') && lastQuad->lval->dataType->type == NODE_PTR){
-                        size = (unsigned long long)computeSizeof((struct astnode_hdr *) lastQuad->lval->dataType->child, true);
+                    if ((stmtUnion.binNode->op == '+' || stmtUnion.binNode->op == '-') &&
+                        lastQuad->lval->dataType->type == NODE_PTR) {
+                        size = (unsigned long long) computeSizeof(
+                                (struct astnode_hdr *) lastQuad->lval->dataType->child, true);
                         ptr1 = true;
                     }
 
-                    lastQuad = stmtToQuad(stmtUnion.binNode->right, lastQuad, firstQuad, LASTBB(lastQuad, init_block), false, dontEmit, func);
+                    lastQuad = stmtToQuad(stmtUnion.binNode->right, lastQuad, firstQuad, LASTBB(lastQuad, init_block),
+                                          false, dontEmit, func);
                     newQuad->rval2 = lastQuad->lval;
-                    if ((stmtUnion.binNode->op == '+' || stmtUnion.binNode->op == '-') && (lastQuad->lval->dataType->type == NODE_PTR || ptr1)) {
+                    if ((stmtUnion.binNode->op == '+' || stmtUnion.binNode->op == '-') &&
+                        (lastQuad->lval->dataType->type == NODE_PTR || ptr1)) {
                         if (!ptr1)
                             size = (unsigned long long) computeSizeof(
                                     (struct astnode_hdr *) lastQuad->lval->dataType->child, true);
-                        else if(stmtUnion.binNode->op == '-' && lastQuad->lval->dataType->type == NODE_PTR)
+                        else if (stmtUnion.binNode->op == '-' && lastQuad->lval->dataType->type == NODE_PTR)
                             ptrDiff = true;
 
                         struct astnode_quad_node *sizeNode = allocQuadConst(int_type, (LexVals) (NUMTYPE) size, false);
                         struct astnode_quad *mulDivQuad = mallocSafeQuad(sizeof(struct astnode_quad));
-                        if (ptrDiff){
-                            newQuad->lval = (struct astnode_quad_node*)genRegister(newQuad->rval1->dataType);
+                        if (ptrDiff) {
+                            newQuad->lval = (struct astnode_quad_node *) genRegister(newQuad->rval1->dataType);
                             mulDivQuad->opcode = QOP_DIV;
                             mulDivQuad->rval1 = newQuad->lval;
                             mulDivQuad->rval2 = sizeNode;
                             // int_type to allow greater variety of expressions, may really be other type
                             mulDivQuad->lval = (struct astnode_quad_node *) genRegister(mulDivQuad->rval2->dataType);
                             mulDivQuad->parentBlock = newQuad->parentBlock;
-                            typeCheck(NULL, newQuad->rval1, newQuad->rval2, newQuad->opcode, stmtUnion.binNode->op, false);
+                            typeCheck(NULL, newQuad->rval1, newQuad->rval2, newQuad->opcode, stmtUnion.binNode->op,
+                                      false);
                             if (!dontEmit) {
                                 lastQuad->next = newQuad;
                                 newQuad->prev = lastQuad;
                                 lastQuad = newQuad;
                             }
                             newQuad = mulDivQuad;
-                        }
-                        else {
+                        } else {
                             mulDivQuad->opcode = QOP_MUL;
                             mulDivQuad->rval1 = ptr1 ? sizeNode : newQuad->rval1;
                             mulDivQuad->rval2 = ptr1 ? newQuad->rval2 : sizeNode;
@@ -399,6 +435,7 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                         newQuad->lval = (struct astnode_quad_node *) genRegister(
                                 ptr1 ? newQuad->rval1->dataType : newQuad->rval2->dataType);
                     }
+                }
             }
             break;
         }
@@ -475,11 +512,13 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                     //This will frequently start a new block due to hidden logic/short circuit ops
                     lastQuad = stmtToQuad(stmtUnion.ctrl->ctrlExpr, lastQuad, firstQuad, LASTBB(lastQuad, init_block),
                                           false, dontEmit, func);
-                    if (!isScalar(lastQuad->lval->dataType)){
+                    if (!isInteger(lastQuad->lval->dataType)){
                         fprintf(stderr, "%s:%d: Error: scalar is required in controlling expression\n", quadLastFile, quadLastLine);
                         exit(EXIT_FAILURE);
                     }
-                    lastQuad = allocCmpQuad(lastQuad->lval, allocQuadConst(int_type, (LexVals)(NUMTYPE)0ull, false), lastQuad);
+                    isUSignedTmp = hasFlag(getType(lastQuad->lval->dataType), unsigned_type);
+                    lastQuad = allocCmpQuad(lastQuad->lval, allocQuadConst(
+                            getType(lastQuad->lval->dataType), (LexVals)(NUMTYPE)0ull, false), lastQuad);
 
 
                     struct basic_block *trueBB = genBasicBlock(lastQuad->parentBlock, lastQuad->parentBlock->funcIdx, NULL);
@@ -497,7 +536,7 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                     newBB->brPt = lastBrPt;
                     newBB->ctPt = lastCtPt;
                     //This should remain in the original BB
-                    lastQuad = allocQuadBR(QOP_BR_NEQ, trueBB, falseBB ? falseBB : newBB, lastQuad);
+                    lastQuad = allocQuadBR(isUSignedTmp ? QOP_BR_NEQU : QOP_BR_NEQ, trueBB, falseBB ? falseBB : newBB, lastQuad);
 
                     if(stmtUnion.ctrl->ctrlType == CTRL_WHILE)
                         allocQuadBR(QOP_BR_UNCOND, ctPt, NULL, lastTrueQuad);
@@ -575,6 +614,7 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
         lastQuad->lval = (struct astnode_quad_node*) genRegister(lastQuad->rval1->dataType);
         lastQuad = allocQuad(QOP_ADD, newQuad->lval, lastQuad->lval, lastQuad);
         lastQuad->lval = (struct astnode_quad_node*) genRegister(lastQuad->rval1->dataType);
+        typeCheck(lastQuad->lval, lastQuad->rval1, lastQuad->rval2, lastQuad->opcode, stmtUnion.unNode->op, true);
         lastQuad = allocQuad(QOP_MOVE, lastQuad->lval, NULL, lastQuad);
         lastQuad->lval = newQuad->rval1;
         /*struct astnode_hdr *binop = allocBinop(stmtUnion.unNode->opand, allocBinop(stmtUnion.unNode->opand, allocConst(1), stmtUnion.unNode->op == PLUSPLUS ? '+' : '-'), '=');
@@ -641,19 +681,19 @@ enum quad_opcode unopToQop(int op){
     exit(EXIT_FAILURE);
 }
 
-enum quad_opcode binopToQop(int op){
+enum quad_opcode binopToQop(int op, bool isUnsigned){
     switch (op) {
         case '+': return QOP_ADD;
         case '-': return QOP_SUB;
         case '%': return QOP_MOD;
         case '*': return QOP_MUL;
         case '/': return QOP_DIV;
-        case EQEQ: return QOP_CC_EQ;
-        case NOTEQ: return QOP_CC_NEQ;
-        case '<': return QOP_CC_LT;
-        case '>': return QOP_CC_GT;
-        case LTEQ: return QOP_CC_LTEQ;
-        case GTEQ: return QOP_CC_GTEQ;
+        case EQEQ: return isUnsigned ? QOP_CC_EQU : QOP_CC_EQ;
+        case NOTEQ: return isUnsigned ? QOP_CC_NEQU : QOP_CC_NEQ;
+        case '<': return isUnsigned ? QOP_CC_LTU : QOP_CC_LT;
+        case '>': return isUnsigned ? QOP_CC_GTU : QOP_CC_GT;
+        case LTEQ: return isUnsigned ? QOP_CC_GTU : QOP_CC_LTEQ;
+        case GTEQ: return isUnsigned ? QOP_CC_GTEQU : QOP_CC_GTEQ;
         case '=': return QOP_MOVE;
     }
     fprintf(stderr, "%s:%d: Error: unknown binop %d\n", quadLastFile, quadLastLine, op);
@@ -742,6 +782,13 @@ struct astnode_quad_node *genLval(struct astnode_hdr *node, struct astnode_quad 
     return lnode;
 }
 
+enum type_flag getType(struct astnode_spec_inter *node){
+    if(node->type == NODE_TYPESPEC)
+        return ((struct astnode_typespec*)node)->stype;
+    else
+        return lint_type; //Assuming ptr is long int
+}
+
 bool isInteger(struct astnode_spec_inter *node){
     if (node->type == NODE_TYPESPEC){
         enum type_flag type = ((struct astnode_typespec*)node)->stype;
@@ -763,10 +810,6 @@ bool isFloat(struct astnode_spec_inter *node){
 
 bool isPtr(struct astnode_spec_inter *node){
     return node->type == NODE_PTR;
-}
-
-bool isScalar(struct astnode_spec_inter *node){
-    return isPtr(node) || isInteger(node);
 }
 
 // Incomplete checks: incomplete array, void type and incomplete struct/union type
@@ -826,7 +869,7 @@ void typeCheck(struct astnode_quad_node *lval, struct astnode_quad_node *rval1, 
             switch (op) {
                 case '!':
                     unaryConvCheck(rval1);
-                    if (!isScalar(rval1->dataType))
+                    if (!isInteger(rval1->dataType))
                         unErr = true;
                     break;
                 case GTEQ:
@@ -842,7 +885,7 @@ void typeCheck(struct astnode_quad_node *lval, struct astnode_quad_node *rval1, 
                 case LOGAND:
                 case LOGOR:
                     unaryConvCheck(rval1);
-                    if (!isScalar(rval1->dataType))
+                    if (!isInteger(rval1->dataType))
                         binErr = true;
                     break;
             }
@@ -1059,6 +1102,12 @@ void printQuads(struct basic_block *basicBlock, char *fname){
                 case QOP_BR_LT: printf("BR_LT"); break;
                 case QOP_BR_GTEQ: printf("BR_GTEQ"); break;
                 case QOP_BR_LTEQ: printf("BR_LTEQ"); break;
+                case QOP_BR_EQU: printf("BR_EQU"); break;
+                case QOP_BR_NEQU: printf("BR_NEQU"); break;
+                case QOP_BR_GTU: printf("BR_GTU"); break;
+                case QOP_BR_LTU: printf("BR_LTU"); break;
+                case QOP_BR_GTEQU: printf("BR_GTEQU"); break;
+                case QOP_BR_LTEQU: printf("BR_LTEQU"); break;
                 case QOP_BR_UNCOND: printf("BR"); break;
                 case QOP_CC_EQ: printf("CC_EQ"); break;
                 case QOP_CC_NEQ: printf("CC_NEQ"); break;
@@ -1066,6 +1115,12 @@ void printQuads(struct basic_block *basicBlock, char *fname){
                 case QOP_CC_LT: printf("CC_LT"); break;
                 case QOP_CC_GTEQ: printf("CC_GTEQ"); break;
                 case QOP_CC_LTEQ: printf("CC_LTEQ"); break;
+                case QOP_CC_EQU: printf("CC_EQU"); break;
+                case QOP_CC_NEQU: printf("CC_NEQU"); break;
+                case QOP_CC_GTU: printf("CC_GTU"); break;
+                case QOP_CC_LTU: printf("CC_LTU"); break;
+                case QOP_CC_GTEQU: printf("CC_GTEQU"); break;
+                case QOP_CC_LTEQU: printf("CC_LTEQU"); break;
                 case QOP_RETURN: printf("RETURN"); break;
             }
 

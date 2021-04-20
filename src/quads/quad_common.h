@@ -25,6 +25,14 @@ enum quad_opcode {
     QOP_BR_LT,
     QOP_BR_GTEQ,
     QOP_BR_LTEQ,
+
+    //Unsigned version
+    QOP_BR_EQU,
+    QOP_BR_NEQU,
+    QOP_BR_GTU,
+    QOP_BR_LTU,
+    QOP_BR_GTEQU,
+    QOP_BR_LTEQU,
     QOP_BR_UNCOND,
 
     QOP_CC_EQ,
@@ -32,7 +40,15 @@ enum quad_opcode {
     QOP_CC_GT,
     QOP_CC_LT,
     QOP_CC_GTEQ,
-    QOP_CC_LTEQ
+    QOP_CC_LTEQ,
+
+    //Unsigned version
+    QOP_CC_EQU,
+    QOP_CC_NEQU,
+    QOP_CC_GTU,
+    QOP_CC_LTU,
+    QOP_CC_GTEQU,
+    QOP_CC_LTEQU
 };
 
 enum quad_node_type {
@@ -110,15 +126,15 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
 struct astnode_quad* argToQuad(struct astnode_hdr *arg, struct astnode_hdr *param, struct astnode_quad *lastQuad,
         struct astnode_quad **firstQuad, char *fname, int numArg, bool varArg, bool dontEmit, struct astnode_fncndec *func);
 enum quad_opcode unopToQop(int op);
-enum quad_opcode binopToQop(int op);
+enum quad_opcode binopToQop(int op, bool isUnsigned);
 struct astnode_quad_register *genRegister(struct astnode_spec_inter *type);
 struct astnode_quad_node *genLval(struct astnode_hdr *node, struct astnode_quad **lastQuad, struct astnode_quad **firstQuad,
         struct basic_block *init_block, bool dontEmit, bool mod, bool funcDes, struct astnode_fncndec *func);
 
+enum type_flag getType(struct astnode_spec_inter *node);
 bool isInteger(struct astnode_spec_inter *node);
 bool isFloat(struct astnode_spec_inter *node);
 bool isPtr(struct astnode_spec_inter *node);
-bool isScalar(struct astnode_spec_inter *node);
 bool isIncomplete(struct astnode_spec_inter *node);
 void typeCheck(struct astnode_quad_node *lval, struct astnode_quad_node *rval1, struct astnode_quad_node *rval2, enum quad_opcode opcode, int op, bool unop);
 void checkFloat(struct astnode_spec_inter *node);
