@@ -1,10 +1,17 @@
 #include "build/src/lexer/lexer.l.o.h"
 #include "build/src/parser/parser.y.o.h"
+#include <stdio.h>
 
 #if GENQUAD == 1
     int doGenQuad = 1;
 #else
     int doGenQuad = 0;
+#endif
+
+#if GENASSEMBLY == 1
+    int doGenAssembly = 1;
+#else
+    int doGenAssembly = 0;
 #endif
 
 
@@ -14,11 +21,17 @@ char currFile[256] = "<stdin>"; //Linux limit is 255
 int quadLastLine = 1;
 char quadLastFile[256] = "<stdin>";
 char *currStr = NULL;
+FILE *outFile;
 unsigned int currStrLen = 0;
 
 
 int main(int argc, char *argv[]) {
     setvbuf(stdout, NULL, _IONBF, 0);
+    if(doGenAssembly){
+        outFile = fopen("out.S", "w");
+    }
+
+
     if(argc > 1){
 		yyin = fopen(argv[1], "r");
 		if(!yyin){

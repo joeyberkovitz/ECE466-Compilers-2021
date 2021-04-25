@@ -6,11 +6,19 @@ int doGenQuad = 1;
 int doGenQuad = 0;
 #endif
 
+#if GENASSEMBLY == 1
+int doGenAssembly = 1;
+#else
+int doGenAssembly = 0;
+#endif
+
+
 int currLine = 1;
 char currFile[256] = "<stdin>"; //Linux limit is 255
 char *currStr = NULL;
 int quadLastLine = 1;
 char quadLastFile[256] = "<stdin>";
+FILE *outFile;
 unsigned int currStrLen = 0;
 
 

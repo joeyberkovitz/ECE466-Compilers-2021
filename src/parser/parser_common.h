@@ -113,6 +113,7 @@ void addToList(struct astnode_lst *lst, struct astnode_hdr *el);
 
 struct astnode_hdr* allocFunc(struct astnode_hdr *name, struct astnode_lst *lst);
 size_t computeSizeof(struct astnode_hdr* el, bool expr);
+size_t computeSizeofTypespec(enum type_flag typeFlag);
 size_t getStructSize(struct astnode_tag *structNode, bool ignoreIncomplete);
 
 enum tab_type {
@@ -206,7 +207,7 @@ struct astnode_var {
     struct symtab_entry_generic;
 
     //Variable specific values:
-    long long offset; //Stack frame offset for auto storage
+    long offset; //Stack frame offset for auto storage
 };
 
 struct astnode_memb {

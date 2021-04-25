@@ -80,12 +80,14 @@ struct astnode_quad_const {
 
     bool string;
     LexVals value;
+    size_t stringNum;
 };
 
 struct astnode_quad_register {
     struct astnode_quad_node;
 
     int registerNum;
+    long stackPos;
 };
 
 struct astnode_quad_bb {

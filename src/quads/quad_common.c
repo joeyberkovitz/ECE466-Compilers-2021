@@ -114,6 +114,7 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                 newQuad->rval1 = (struct astnode_quad_node*)mallocSafeQuad(sizeof(struct astnode_quad_const));
                 newQuad->rval1->quadType = QUADNODE_CONST;
                 ((struct astnode_quad_const*)newQuad->rval1)->string = stmtUnion.lexNode->sym == STRING;
+                ((struct astnode_quad_const*)newQuad->rval1)->stringNum = 0;
                 ((struct astnode_quad_const*)newQuad->rval1)->value = stmtUnion.lexNode->value;
                 if (stmtUnion.lexNode->sym == CHARLIT)
                     ((struct astnode_quad_const*)newQuad->rval1)->value.num_val.integer_val = stmtUnion.lexNode->value.string_val[0];
@@ -461,7 +462,7 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
             lastQuad = stmtToQuad(stmtUnion.fncn->name, lastQuad, firstQuad, LASTBB(lastQuad, init_block), false, dontEmit, func);
             newQuad->rval1 = lastQuad->lval;
             struct astnode_fncndec *fncnCall = (struct astnode_fncndec*)stmtUnion.fncn->name;
-            for (int i = 0; i < stmtUnion.fncn->lst->numVals; i++){
+            for (int i = stmtUnion.fncn->lst->numVals - 1; i >= 0; i--){
                 if (fncnCall->args != NULL && i < fncnCall->args->numVals)
                     lastQuad = argToQuad(stmtUnion.fncn->lst->els[i], fncnCall->args->els[i], lastQuad, firstQuad,
                                          fncnCall->ident->value.string_val, i, false, dontEmit, func);
@@ -657,7 +658,7 @@ struct astnode_quad* argToQuad(struct astnode_hdr *arg, struct astnode_hdr *para
             unaryConvCheck(newQuad->rval2);
     }
 
-    if(*firstQuad == NULL && !dontEmit)
+    if(firstQuad != NULL && *firstQuad == NULL && !dontEmit)
         *firstQuad = newQuad;
 
     if (!dontEmit) {
@@ -706,6 +707,7 @@ struct astnode_quad_register *genRegister(struct astnode_spec_inter *type){
     newReg->type = NODE_QUAD_VAL;
     newReg->quadType = QUADNODE_REGISTER;
     newReg->registerNum = registerCounter;
+    newReg->stackPos = 0;
     newReg->dataType = type;
     registerCounter++;
     return newReg;
@@ -786,7 +788,7 @@ enum type_flag getType(struct astnode_spec_inter *node){
     if(node->type == NODE_TYPESPEC)
         return ((struct astnode_typespec*)node)->stype;
     else
-        return lint_type; //Assuming ptr is long int
+        return lint_type; //Assuming ptr is long int and non-type-spec is pointer
 }
 
 bool isInteger(struct astnode_spec_inter *node){
@@ -993,6 +995,7 @@ struct astnode_quad_node* allocQuadConst(enum type_flag type, LexVals value, boo
     quadConstNode->dataType = allocTypespec(type);
     ((struct astnode_quad_const *) quadConstNode)->value = value;
     ((struct astnode_quad_const *) quadConstNode)->string = string;
+    ((struct astnode_quad_const *) quadConstNode)->stringNum = 0;
     return quadConstNode;
 }
 

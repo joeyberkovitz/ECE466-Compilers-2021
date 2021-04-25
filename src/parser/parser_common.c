@@ -1,11 +1,13 @@
 #include "parser_common.h"
 #include "../quads/quad_common.h"
+#include "../backend/back_common.h"
 #include <stdio.h>
 #include <stdlib.h>
 
 extern int currLine;
 extern char currFile[];
 extern int doGenQuad;
+extern int doGenAssembly;
 
 void *mallocSafeParse(size_t size){
     void *ret = malloc(size);
@@ -255,30 +257,9 @@ size_t computeSizeof(struct astnode_hdr* el, bool expr){
                                 currLine);
                         exit(EXIT_FAILURE);
                     }
-                    if(hasFlag(specNode->stype,char_type))
-                        return multiplier*sizeof(char);
-                    else if(hasFlag(specNode->stype,sint_type))
-                        return multiplier*sizeof(short);
-                    else if(specNode->stype == int_type || specNode->stype == (int_type | signed_type) || specNode->stype == (int_type | unsigned_type))
-                        return multiplier*sizeof(int);
-                    else if(hasFlag(specNode->stype,lint_type) && !hasFlag(specNode->stype,double_type))
-                        return multiplier*sizeof(long);
-                    else if(hasFlag(specNode->stype,llint_type))
-                        return multiplier*sizeof(long long);
-                    else if(hasFlag(specNode->stype,float_type))
-                        return multiplier*sizeof(float);
-                    else if(specNode->stype == double_type)
-                        return multiplier*sizeof(double);
-                    else if(specNode->stype == ldouble_type)
-                        return multiplier*sizeof(long double);
-                    else if(hasFlag(specNode->stype,bool_type))
-                        return multiplier*sizeof(_Bool);
-                    else if(hasFlag(specNode->stype,fcomplex_type))
-                        return multiplier*sizeof(float _Complex);
-                    else if(hasFlag(specNode->stype,dcomplex_type))
-                        return multiplier*sizeof(double _Complex);
-                    else if(hasFlag(specNode->stype,ldcomplex_type))
-                        return multiplier*sizeof(long double _Complex);
+                    size_t basicVal = computeSizeofTypespec(specNode->stype);
+                    if(basicVal > 0)
+                        return multiplier * basicVal;
                     else if(hasFlag(specNode->stype,struct_type))
                         return multiplier*getStructSize((struct astnode_tag*)specNode->type_specs->els[0], false);
                     break;
@@ -296,6 +277,35 @@ size_t computeSizeof(struct astnode_hdr* el, bool expr){
     }
 
     fprintf(stderr, "%s:%d: Error: failed to compute sizeof\n", currFile, currLine);
+    return 0;
+}
+
+size_t computeSizeofTypespec(enum type_flag typeFlag){
+    if(hasFlag(typeFlag,char_type))
+        return sizeof(char);
+    else if(hasFlag(typeFlag,sint_type))
+        return sizeof(short);
+    else if(typeFlag == int_type || typeFlag == (int_type | signed_type) || typeFlag == (int_type | unsigned_type))
+        return sizeof(int);
+    else if(hasFlag(typeFlag, lint_type) && !hasFlag(typeFlag,double_type))
+        return sizeof(long);
+    else if(hasFlag(typeFlag,llint_type))
+        return sizeof(long long);
+    else if(hasFlag(typeFlag,float_type))
+        return sizeof(float);
+    else if(typeFlag == double_type)
+        return sizeof(double);
+    else if(typeFlag == ldouble_type)
+        return sizeof(long double);
+    else if(hasFlag(typeFlag,bool_type))
+        return sizeof(_Bool);
+    else if(hasFlag(typeFlag,fcomplex_type))
+        return sizeof(float _Complex);
+    else if(hasFlag(typeFlag,dcomplex_type))
+        return sizeof(double _Complex);
+    else if(hasFlag(typeFlag,ldcomplex_type))
+        return sizeof(long double _Complex);
+
     return 0;
 }
 
@@ -684,6 +694,7 @@ struct astnode_hdr* symCopyAndEnter(bool enter){
         memcpy(varNode, currDecl.generic, sizeof(struct symtab_entry_generic));
         varNode->st_type = ENTRY_VAR;
         varNode->ns = OTHER;
+        varNode->offset = 0;
         entry = (union symtab_entry)varNode;
     }
 
@@ -2112,8 +2123,13 @@ void printFunc(struct astnode_fncndec *func){
     dumpStatements(currTab->stmtList, 1);
     printf("\n");
 
-    if(doGenQuad)
-        genQuads(currTab->stmtList, NULL, funcIdx, func);
+    if(doGenQuad) {
+        struct basic_block* firstBB = genQuads(currTab->stmtList, NULL, funcIdx, func);
+
+        if(doGenAssembly){
+            assembleFunc(firstBB, func);
+        }
+    }
 
     funcIdx++;
 }
