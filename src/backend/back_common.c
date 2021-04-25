@@ -41,20 +41,30 @@ void assembleFunc(struct basic_block *bb, struct astnode_fncndec *func){
 long computeStackSize(struct basic_block *bb, struct astnode_fncndec *func){
     long totalSize = 0;
     long startPos = 0;
+    long newSize = 0;
 
     struct basic_block *currBB = bb;
     struct astnode_quad *currQuad = NULL;
     while (currBB != NULL){
         currQuad = currBB->quads;
         while (currQuad != NULL){
-            if(currQuad->lval != NULL)
-                startPos -= (totalSize += computeQValSize(currQuad->lval, startPos));
+            if(currQuad->lval != NULL) {
+                newSize = computeQValSize(currQuad->lval, startPos);
+                startPos -= newSize;
+                totalSize += newSize;
+            }
 
-            if(currQuad->rval1 != NULL)
-                startPos -= (totalSize += computeQValSize(currQuad->rval1, startPos));
+            if(currQuad->rval1 != NULL){
+                newSize = computeQValSize(currQuad->rval1, startPos);
+                startPos -= newSize;
+                totalSize += newSize;
+            }
 
-            if(currQuad->rval2 != NULL)
-                startPos -= (totalSize += computeQValSize(currQuad->rval2, startPos));
+            if(currQuad->rval2 != NULL){
+                newSize = computeQValSize(currQuad->rval2, startPos);
+                startPos -= newSize;
+                totalSize += newSize;
+            }
 
             currQuad = currQuad->next;
         }
