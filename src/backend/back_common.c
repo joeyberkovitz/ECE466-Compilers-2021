@@ -251,19 +251,19 @@ void quadToAsmbly(struct astnode_quad *quad){
                 if(isStore || isLoad){
                     fprintf(outFile, "movl    ");
                     asmblVal(isStore ? quad->lval : quad->rval1);
-                    fprintf(outFile, ",%%ebx\n");
+                    fprintf(outFile, ",%%ecx\n");
                 }
 
 
                 fprintf(outFile, "%s    ", op);
                 if(isLoad)
-                    fprintf(outFile, "(%%ebx)");
+                    fprintf(outFile, "(%%ecx)");
                 else
                     asmblVal(quad->rval1);
                 fprintf(outFile, ", %s\n", tmpReg);
                 fprintf(outFile, "%s    %s, ",op, tmpReg);
                 if(isStore)
-                    fprintf(outFile, "(%%ebx)");
+                    fprintf(outFile, "(%%ecx)");
                 else
                     asmblVal(quad->lval);
                 fprintf(outFile, "\n");
@@ -320,7 +320,7 @@ void quadToAsmbly(struct astnode_quad *quad){
             else if(opSize == 4){
                 opSuffix = 'l';
                 tmpReg1 = "%eax";
-                tmpReg2 = "%ebx";
+                tmpReg2 = "%ecx";
             }
             else if(opSize == 2){
                 opSuffix = 'w';

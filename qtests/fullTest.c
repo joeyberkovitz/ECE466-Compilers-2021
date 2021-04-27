@@ -13,10 +13,11 @@ int func1(){
 	testGlob = testLoc + 3;
 	
 	int i;
+	i = 0;
 	while(i < 5){
 		arr[i] = i;
-		i++;
-		printf("Arr[i] = %d\n", arr[i]);
+        printf("Arr[i] = %d\n", arr[i]);
+        i++;
 	}
 	
 	int *ptr;
