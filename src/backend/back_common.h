@@ -68,5 +68,6 @@ void quadToAsmbly(struct astnode_quad *quad);
 void asmblStrings(struct basic_block *bb);
 void asmblVal(struct astnode_quad_node *node);
 void asmblQOPCC(enum quad_opcode opcode);
+void registerGlobal(char *name, size_t size);
 
 #endif //ECE466_COMPILERS_2021_BACK_COMMON_H

@@ -524,3 +524,12 @@ void asmblQOPCC(enum quad_opcode opcode){
     if(op != NULL)
         fprintf(outFile, "%s    ", op);
 }
+
+void registerGlobal(char *name, size_t size){
+    wchar_t *wN = (wchar_t*)name;
+    fprintf(outFile, ".bss\n"
+                            ".type %S, @object\n"
+                            ".size %S, %zu\n"
+                            "%S:\n"
+                            ".zero %zu\n", wN, wN, size, wN,size);
+}

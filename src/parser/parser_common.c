@@ -574,6 +574,10 @@ struct symtab_entry_generic* symtabEnter(struct symtab *symtab, union symtab_ent
     if(entry.generic->ns != TAG && entry.generic->ns != MEMBER && symtab->scope != SCOPE_PROTO)
         printDecl(symtab, entry, 0);
 
+    //Hook to generate assembly for globals
+    if(symtab->scope == SCOPE_FILE && entry.generic->st_type != ENTRY_FNCN)
+        registerGlobal(entry.generic->ident->value.string_val, computeSizeof((struct astnode_hdr*)entry.generic, false));
+
     if(existingVal.generic != NULL && !replace)
         return existingVal.generic;
     else
