@@ -19,7 +19,6 @@ void assembleFunc(struct basic_block *bb, struct astnode_fncndec *func){
     fprintf(outFile, "movl    %%esp, %%ebp\n");
     long stackSize = computeStackSize(bb, func);
     stackSize += stackSize % 16;
-    //TODO: this seems overly large in some cases
     fprintf(outFile, "subl    $%ld, %%esp\n", stackSize);
 
     //At this point all registers/vars should have offsets on stack
@@ -29,9 +28,7 @@ void assembleFunc(struct basic_block *bb, struct astnode_fncndec *func){
         fprintf(outFile, ".BB%d.%d:\n", currBB->funcIdx, currBB->blockIdx);
         currQuad = currBB->quads;
         while(currQuad != NULL){
-
             quadToAsmbly(currQuad);
-
             currQuad = currQuad->next;
         }
         currBB = currBB->next;
@@ -68,7 +65,7 @@ long computeStackSize(struct basic_block *bb, struct astnode_fncndec *func){
 
             currQuad = currQuad->next;
         }
-        currBB = bb->next;
+        currBB = currBB->next;
     }
 
 
@@ -128,10 +125,6 @@ long computeQValSize(struct astnode_quad_node *node, long startPos){
 
 void quadToAsmbly(struct astnode_quad *quad){
     switch (quad->opcode) {
-        case QOP_LOAD:
-            break;
-        case QOP_STORE:
-            break;
         case QOP_ADD:
         case QOP_SUB:
         case QOP_MUL:{
@@ -230,9 +223,12 @@ void quadToAsmbly(struct astnode_quad *quad){
 
             break;
         }
+        case QOP_STORE:
+        case QOP_LOAD:
         case QOP_MOVE: {
             size_t regSize = computeSizeofTypespec(getType(quad->lval->dataType));
-            char *op, *tmpReg;
+            char *op, *tmpReg, *tmpReg2;
+            bool isLoad = quad->opcode == QOP_LOAD, isStore = quad->opcode == QOP_STORE;
             if(regSize == 4){
                 op = "movl";
                 tmpReg = "%eax";
@@ -252,11 +248,24 @@ void quadToAsmbly(struct astnode_quad *quad){
             }
 
             if(regSize == 1 || regSize == 2 || regSize == 4){
+                if(isStore || isLoad){
+                    fprintf(outFile, "movl    ");
+                    asmblVal(isStore ? quad->lval : quad->rval1);
+                    fprintf(outFile, ",%%ebx\n");
+                }
+
+
                 fprintf(outFile, "%s    ", op);
-                asmblVal(quad->rval1);
+                if(isLoad)
+                    fprintf(outFile, "(%%ebx)");
+                else
+                    asmblVal(quad->rval1);
                 fprintf(outFile, ", %s\n", tmpReg);
                 fprintf(outFile, "%s    %s, ",op, tmpReg);
-                asmblVal(quad->lval);
+                if(isStore)
+                    fprintf(outFile, "(%%ebx)");
+                else
+                    asmblVal(quad->lval);
                 fprintf(outFile, "\n");
             }
 
@@ -282,7 +291,7 @@ void quadToAsmbly(struct astnode_quad *quad){
             fprintf(outFile, "\n");
             break;
         case QOP_CALL:
-            fprintf(outFile, "call    ");
+            fprintf(outFile, "call    *");
             asmblVal(quad->rval1);
             fprintf(outFile, "\n");
 
@@ -301,8 +310,44 @@ void quadToAsmbly(struct astnode_quad *quad){
             break;
         case QOP_NOP:
             break;
-        case QOP_CMP:
+        case QOP_CMP: {
+            size_t opSize = computeSizeofTypespec(getType(quad->rval1->dataType));
+            char *tmpReg1, *tmpReg2, opSuffix;
+            if(opSize == 8){
+                fprintf(stderr, "64-bit compare not supported\n");
+                exit(EXIT_FAILURE);
+            }
+            else if(opSize == 4){
+                opSuffix = 'l';
+                tmpReg1 = "%eax";
+                tmpReg2 = "%ebx";
+            }
+            else if(opSize == 2){
+                opSuffix = 'w';
+                tmpReg1 = "%ax";
+                tmpReg2 = "%bx";
+            }
+            else if(opSize == 1){
+                opSuffix = 'b';
+                tmpReg1 = "%al";
+                tmpReg2 = "%bl";
+            } else {
+                fprintf(stderr, "Unsupported compare size %zu\n", opSize);
+                exit(EXIT_FAILURE);
+            }
+
+            //Move left into tmpReg1, move right into tmpReg2, compare tmpReg2, tmpReg1
+            fprintf(outFile, "mov%c    ", opSuffix);
+            asmblVal(quad->rval1);
+            fprintf(outFile, ",%s\n", tmpReg1);
+
+            fprintf(outFile, "mov%c    ", opSuffix);
+            asmblVal(quad->rval2);
+            fprintf(outFile, ",%s\n", tmpReg2);
+
+            fprintf(outFile, "cmp%c    %s,%s\n", opSuffix, tmpReg2, tmpReg1);
             break;
+        }
         case QOP_RETURN:
             if(quad->rval1 != NULL){
                 fprintf(outFile, "movl    ");
@@ -311,56 +356,71 @@ void quadToAsmbly(struct astnode_quad *quad){
             }
             fprintf(outFile, "leave\nret\n");
             break;
+        //Only branches used are eq/neq and unconditional
         case QOP_BR_EQ:
-            break;
-        case QOP_BR_NEQ:
-            break;
-        case QOP_BR_GT:
-            break;
-        case QOP_BR_LT:
-            break;
-        case QOP_BR_GTEQ:
-            break;
-        case QOP_BR_LTEQ:
-            break;
         case QOP_BR_EQU:
+        case QOP_BR_NEQ:
+        case QOP_BR_NEQU: {
+            char *op = "je";
+            if(quad->opcode == QOP_BR_NEQ || quad->opcode == QOP_BR_NEQU)
+                op = "jne";
+
+            fprintf(outFile, "%s    ", op);
+            asmblVal(quad->rval1);
+            fprintf(outFile, "\n");
+            fprintf(outFile, "jmp    ");
+            asmblVal(quad->rval2);
+            fprintf(outFile, "\n");
             break;
-        case QOP_BR_NEQU:
-            break;
-        case QOP_BR_GTU:
-            break;
-        case QOP_BR_LTU:
-            break;
-        case QOP_BR_GTEQU:
-            break;
-        case QOP_BR_LTEQU:
-            break;
+        }
         case QOP_BR_UNCOND:
+            fprintf(outFile, "jmp    ");
+            asmblVal(quad->rval1);
+            fprintf(outFile, "\n");
             break;
         case QOP_CC_EQ:
-            break;
         case QOP_CC_NEQ:
-            break;
         case QOP_CC_GT:
-            break;
         case QOP_CC_LT:
-            break;
         case QOP_CC_GTEQ:
-            break;
         case QOP_CC_LTEQ:
-            break;
         case QOP_CC_EQU:
-            break;
         case QOP_CC_NEQU:
-            break;
         case QOP_CC_GTU:
-            break;
         case QOP_CC_LTU:
-            break;
         case QOP_CC_GTEQU:
+        case QOP_CC_LTEQU: {
+            size_t opSize = computeSizeofTypespec(getType(quad->lval->dataType));
+            char opSuffix, *reg;
+
+            if(opSize > 1)
+                fprintf(outFile, "movl    $0,%%eax\n"); //Clear out EAX
+
+            asmblQOPCC(quad->opcode); //Print out op-code assembly
+            fprintf(outFile, "%%al\n"); //Always store result in AL
+
+            if(opSize == 4){
+                opSuffix = 'l';
+                reg = "eax";
+            }
+            else if(opSize == 2){
+                opSuffix = 'w';
+                reg = "ax";
+            }
+            else if(opSize == 1){
+                opSuffix = 'b';
+                reg = "al";
+            }
+            else{
+                fprintf(stderr, "Error: unsupported op-size for CC %zu\n", opSize);
+                exit(EXIT_FAILURE);
+            }
+
+            fprintf(outFile, "mov%c    %%%s, ", opSuffix, reg);
+            asmblVal(quad->lval);
+            fprintf(outFile, "\n");
             break;
-        case QOP_CC_LTEQU:
-            break;
+        }
     }
 }
 
@@ -419,4 +479,48 @@ void asmblVal(struct astnode_quad_node *node){
         }
         fprintf(outFile, "%ld(%%ebp)", varNode->offset);
     }
+    else if(node->quadType == QUADNODE_BASICBLOCK){
+        struct astnode_quad_bb *quadBB = (struct astnode_quad_bb*)node;
+        fprintf(outFile, ".BB%d.%d", quadBB->bb->funcIdx, quadBB->bb->blockIdx);
+    }
+}
+
+void asmblQOPCC(enum quad_opcode opcode){
+    char *op = NULL;
+    switch (opcode) {
+        case QOP_CC_EQ:
+        case QOP_CC_EQU:
+            op = "sete";
+            break;
+        case QOP_CC_NEQ:
+        case QOP_CC_NEQU:
+            op = "setne";
+            break;
+        case QOP_CC_GT:
+            op = "setg";
+            break;
+        case QOP_CC_GTU:
+            op = "seta";
+            break;
+        case QOP_CC_GTEQ:
+            op = "setge";
+            break;
+        case QOP_CC_GTEQU:
+            op = "setae";
+            break;
+        case QOP_CC_LT:
+            op = "setl";
+            break;
+        case QOP_CC_LTU:
+            op = "setb";
+            break;
+        case QOP_CC_LTEQ:
+            op = "setle";
+            break;
+        case QOP_CC_LTEQU:
+            op = "setbe";
+            break;
+    }
+    if(op != NULL)
+        fprintf(outFile, "%s    ", op);
 }

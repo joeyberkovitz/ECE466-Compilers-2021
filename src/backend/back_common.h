@@ -67,5 +67,6 @@ void assembleMovArg(struct astnode_hdr *arg, int argNum);
 void quadToAsmbly(struct astnode_quad *quad);
 void asmblStrings(struct basic_block *bb);
 void asmblVal(struct astnode_quad_node *node);
+void asmblQOPCC(enum quad_opcode opcode);
 
 #endif //ECE466_COMPILERS_2021_BACK_COMMON_H

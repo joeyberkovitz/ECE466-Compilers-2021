@@ -247,9 +247,10 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                     if (stmtUnion.binNode->left->type == NODE_UNOP) {
                         struct astnode_quad *storeQuad = newQuad;
                         storeQuad->opcode = QOP_STORE;
-                        storeQuad->rval2 = lnode;
+                        storeQuad->lval = lnode;
+                        storeQuad->rval2 = NULL;
                         storeQuad->parentBlock = newQuad->parentBlock;
-                        typeCheck(NULL, storeQuad->rval1, storeQuad->rval2, storeQuad->opcode, '=', false);
+                        typeCheck(NULL, storeQuad->rval1, storeQuad->lval, storeQuad->opcode, '=', false);
                         if (!dontEmit) {
                             lastQuad->next = storeQuad;
                             storeQuad->prev = lastQuad;
