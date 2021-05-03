@@ -397,7 +397,9 @@ struct astnode_quad* stmtToQuad(struct astnode_hdr *stmt, struct astnode_quad *l
                         else if (stmtUnion.binNode->op == '-' && lastQuad->lval->dataType->type == NODE_PTR)
                             ptrDiff = true;
 
-                        struct astnode_quad_node *sizeNode = allocQuadConst(int_type, (LexVals) (NUMTYPE) size, false);
+                        struct astnode_quad_node *sizeNodeConst = allocQuadConst(int_type, (LexVals) (NUMTYPE) size, false);
+                        lastQuad = allocMoveQuad((struct astnode_quad_node *) genRegister(allocTypespec(int_type)), sizeNodeConst, lastQuad);
+                        struct astnode_quad_node *sizeNode = lastQuad->lval;
                         struct astnode_quad *mulDivQuad = mallocSafeQuad(sizeof(struct astnode_quad));
                         if (ptrDiff) {
                             newQuad->lval = (struct astnode_quad_node *) genRegister(newQuad->rval1->dataType);
