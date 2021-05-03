@@ -112,7 +112,7 @@ long computeQValSize(struct astnode_quad_node *node, long startPos){
         case QUADNODE_REGISTER: {
             struct astnode_quad_register *reg = (struct astnode_quad_register*)node;
             if(reg->stackPos == 0){
-                long typeSize = (long)computeSizeofTypespec(getType(reg->dataType));;
+                long typeSize = (long)computeSizeofTypespec(getType(reg->dataType));
                 reg->stackPos = startPos - typeSize; //grow up
                 return typeSize;
             }

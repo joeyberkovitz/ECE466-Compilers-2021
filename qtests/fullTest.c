@@ -2,7 +2,7 @@ int printf();
 
 int testGlob;
 
-int func1(){
+int main(){
 	int testLoc;
 	int arr[5];
 	
