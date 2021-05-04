@@ -1,8 +1,5 @@
 #include "back_common.h"
 
-//TODO: add hook when defining globals in parser to callback to here
-//Alternatively - every time a function is assembled, look through file scope and declare any new globals
-
 extern FILE *outFile;
 
 void assembleFunc(struct basic_block *bb, struct astnode_fncndec *func){
@@ -99,7 +96,7 @@ long computeQValSize(struct astnode_quad_node *node, long startPos){
         case QUADNODE_LOCAL: {
             struct astnode_var *varNode = ((struct astnode_var*)((struct astnode_quad_var*)node)->varNode);
             if(varNode->st_type != ENTRY_VAR){
-                fprintf(stderr, "%s:%d: Error: trying to compute quad val size of non-var node ", varNode->file, varNode->line);
+                fprintf(stderr, "%s:%d: Error: trying to compute quad val size of non-var node\n", varNode->file, varNode->line);
                 exit(EXIT_FAILURE);
             }
             if(varNode->offset == 0){
@@ -242,7 +239,6 @@ void quadToAsmbly(struct astnode_quad *quad){
                 tmpReg = "%al";
             }
             else if(regSize == 8){
-                //TODO: do we need to support 64-bit in 32-bit environment?
                 fprintf(stderr, "Error: 64-bit not implemented\n");
                 exit(EXIT_FAILURE);
             }
