@@ -69,7 +69,7 @@ long computeStackSize(struct basic_block *bb, struct astnode_fncndec *func){
     }
 
 
-    if(func->args != NULL) {
+    if(func->args != NULL && !func->none) {
         long posArgStack = 4;
         //Assign arg positions from right to left
         for (int i = func->args->numVals - 1; i >= 0; i--) {
